@@ -12,6 +12,7 @@ struct Types {
   static LogicalType S2_CELL_UNION();
   static LogicalType S2_CELL_CENTER();
   static LogicalType GEOGRAPHY();
+  static LogicalType BOX_LNGLAT();
 };
 
 void RegisterTypes(DatabaseInstance& instance);
