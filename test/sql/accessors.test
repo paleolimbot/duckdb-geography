@@ -160,3 +160,24 @@ query I
 SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::GEOGRAPHY);
 ----
 1
+
+# Numpoints
+query I
+SELECT s2_num_points(s2_cellfromlonlat(-64, 45)::GEOGRAPHY);
+----
+1
+
+query I
+SELECT s2_num_points('POINT (-64 45)'::GEOGRAPHY);
+----
+1
+
+query I
+SELECT s2_num_points('LINESTRING (0 0, 1 1)'::GEOGRAPHY);
+----
+2
+
+query I
+SELECT s2_num_points('GEOMETRYCOLLECTION EMPTY');
+----
+0

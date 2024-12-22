@@ -473,6 +473,57 @@ SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::G
   }
 };
 
+struct S2NumPoints {
+  static void Register(DatabaseInstance& instance) {
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_num_points", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::INTEGER);
+            variant.SetFunction(ExecuteFn);
+          });
+
+          func.SetDescription(R"(
+Extract the number of vertices in the geography.
+)");
+          func.SetExample(R"(
+SELECT s2_num_points(s2_data_country('Fiji'));
+----
+SELECT s2_num_points(s2_data_country('Canada'));
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+  }
+
+  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    Execute(args.data[0], result, args.size());
+  }
+
+  static void Execute(Vector& source, Vector& result, idx_t count) {
+    GeographyDecoder decoder;
+
+    UnaryExecutor::Execute<string_t, int32_t>(
+        source, result, count, [&](string_t geog_str) {
+          decoder.DecodeTag(geog_str);
+
+          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+            return 0;
+          }
+
+          switch (decoder.tag.kind) {
+            case s2geography::GeographyKind::CELL_CENTER:
+              return 1;
+            default: {
+              auto geog = decoder.Decode(geog_str);
+              return s2geography::s2_num_points(*geog);
+            }
+          }
+        });
+  }
+};
+
 }  // namespace
 
 void RegisterS2GeographyAccessors(DatabaseInstance& instance) {
@@ -484,6 +535,7 @@ void RegisterS2GeographyAccessors(DatabaseInstance& instance) {
   S2Length::Register(instance);
   S2XY::Register(instance);
   S2Dimension::Register(instance);
+  S2NumPoints::Register(instance);
 }
 
 }  // namespace duckdb_s2
