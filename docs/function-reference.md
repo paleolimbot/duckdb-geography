@@ -4,10 +4,12 @@
 | Function | Summary |
 | --- | --- |
 | [`s2_area`](#s2_area) | Calculate the area of the geography in square meters.|
+| [`s2_dimension`](#s2_dimension) | Calculate the highest dimension element present in the geography.|
 | [`s2_is_valid`](#s2_is_valid) | Returns true if the geography is valid.|
 | [`s2_is_valid_reason`](#s2_is_valid_reason) | Returns the error string for invalid geographies or the empty string ("") otherwise.|
 | [`s2_isempty`](#s2_isempty) | Returns true if the geography is empty.|
 | [`s2_length`](#s2_length) | Calculate the length of the geography in meters.|
+| [`s2_num_points`](#s2_num_points) | Extract the number of vertices in the geography.|
 | [`s2_perimeter`](#s2_perimeter) | Calculate the perimeter of the geography in meters.|
 | [`s2_x`](#s2_x) | Extract the longitude of a point geography.|
 | [`s2_y`](#s2_y) | Extract the latitude of a point geography.|
@@ -86,6 +88,65 @@ SELECT s2_area('POINT (0 0)'::GEOGRAPHY) AS area;
 --├────────┤
 --│    0.0 │
 --└────────┘
+```
+
+### s2_dimension
+
+Calculate the highest dimension element present in the geography.
+
+```sql
+INTEGER s2_dimension(geog GEOGRAPHY)
+```
+
+#### Description
+
+Points have a dimension of 0; linestrings have a dimension of 1; polygons have
+a dimension of 2. For geography collections, this will return the highest dimension
+value of any element in the collection (e.g., a collection containing a point and
+a polygon will return 2). An empty geography collection returns a value of -1.
+
+#### Example
+
+```sql
+SELECT s2_dimension('POINT (0 0)'::GEOGRAPHY);
+--┌────────────────────────────────────────────────┐
+--│ s2_dimension(CAST('POINT (0 0)' AS GEOGRAPHY)) │
+--│                     int32                      │
+--├────────────────────────────────────────────────┤
+--│                                              0 │
+--└────────────────────────────────────────────────┘
+
+SELECT s2_dimension('LINESTRING (0 0, 1 1)'::GEOGRAPHY);
+--┌──────────────────────────────────────────────────────────┐
+--│ s2_dimension(CAST('LINESTRING (0 0, 1 1)' AS GEOGRAPHY)) │
+--│                          int32                           │
+--├──────────────────────────────────────────────────────────┤
+--│                                                        1 │
+--└──────────────────────────────────────────────────────────┘
+
+SELECT s2_dimension(s2_data_country('Canada'));
+--┌─────────────────────────────────────────┐
+--│ s2_dimension(s2_data_country('Canada')) │
+--│                  int32                  │
+--├─────────────────────────────────────────┤
+--│                                       2 │
+--└─────────────────────────────────────────┘
+
+SELECT s2_dimension('GEOMETRYCOLLECTION EMPTY');
+--┌──────────────────────────────────────────┐
+--│ s2_dimension('GEOMETRYCOLLECTION EMPTY') │
+--│                  int32                   │
+--├──────────────────────────────────────────┤
+--│                                       -1 │
+--└──────────────────────────────────────────┘
+
+SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::GEOGRAPHY);
+--┌────────────────────────────────────────────────────────────────────────────────────────────┐
+--│ s2_dimension(CAST('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))' AS GEOGRAPHY)) │
+--│                                           int32                                            │
+--├────────────────────────────────────────────────────────────────────────────────────────────┤
+--│                                                                                          1 │
+--└────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### s2_is_valid
@@ -207,6 +268,34 @@ SELECT s2_length(s2_data_country('Canada')) AS length;
 --├────────┤
 --│    0.0 │
 --└────────┘
+```
+
+### s2_num_points
+
+Extract the number of vertices in the geography.
+
+```sql
+INTEGER s2_num_points(geog GEOGRAPHY)
+```
+
+#### Example
+
+```sql
+SELECT s2_num_points(s2_data_country('Fiji'));
+--┌────────────────────────────────────────┐
+--│ s2_num_points(s2_data_country('Fiji')) │
+--│                 int32                  │
+--├────────────────────────────────────────┤
+--│                                     17 │
+--└────────────────────────────────────────┘
+
+SELECT s2_num_points(s2_data_country('Canada'));
+--┌──────────────────────────────────────────┐
+--│ s2_num_points(s2_data_country('Canada')) │
+--│                  int32                   │
+--├──────────────────────────────────────────┤
+--│                                      761 │
+--└──────────────────────────────────────────┘
 ```
 
 ### s2_perimeter
