@@ -4,6 +4,8 @@
 | Function | Summary |
 | --- | --- |
 | [`s2_area`](#s2_area) | Calculate the area of the geography in square meters.|
+| [`s2_is_valid`](#s2_is_valid) | Returns true if the geography is valid.|
+| [`s2_is_valid_reason`](#s2_is_valid_reason) | Returns the error string for invalid geographies or the empty string ("") otherwise.|
 | [`s2_isempty`](#s2_isempty) | Returns true if the geography is empty.|
 | [`s2_length`](#s2_length) | Calculate the length of the geography in meters.|
 | [`s2_perimeter`](#s2_perimeter) | Calculate the perimeter of the geography in meters.|
@@ -35,7 +37,9 @@
 | [`s2_aswkb`](#s2_aswkb) | Serialize a GEOGRAPHY as well-known binary (WKB).|
 | [`s2_format`](#s2_format) | Returns the WKT string of the geography with a given precision.|
 | [`s2_geogfromtext`](#s2_geogfromtext) | Returns the geography from a WKT string.|
+| [`s2_geogfromtext_novalidate`](#s2_geogfromtext_novalidate) | Returns the geography from a WKT string skipping validation.|
 | [`s2_geogfromwkb`](#s2_geogfromwkb) | Converts a WKB blob to a geography.|
+| [`s2_geogfromwkb_novalidate`](#s2_geogfromwkb_novalidate) | Returns the geography from a WKB blob skipping validation.|
 | [`s2_prepare`](#s2_prepare) | Prepares a geography for faster predicate and overlay operations.|
 | [`s2_data_city`](#s2_data_city) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
 | [`s2_data_country`](#s2_data_country) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
@@ -82,6 +86,67 @@ SELECT s2_area('POINT (0 0)'::GEOGRAPHY) AS area;
 --├────────┤
 --│    0.0 │
 --└────────┘
+```
+
+### s2_is_valid
+
+Returns true if the geography is valid.
+
+```sql
+BOOLEAN s2_is_valid(geog GEOGRAPHY)
+```
+
+#### Description
+
+The most common reasons for invalid geographies are repeated points,
+an inadequate number of points, and/or crossing edges.
+
+#### Example
+
+```sql
+SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 1 1)')) AS valid;
+--┌─────────┐
+--│  valid  │
+--│ boolean │
+--├─────────┤
+--│ true    │
+--└─────────┘
+
+SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)')) AS valid;
+--┌─────────┐
+--│  valid  │
+--│ boolean │
+--├─────────┤
+--│ false   │
+--└─────────┘
+```
+
+### s2_is_valid_reason
+
+Returns the error string for invalid geographies or the empty string ("") otherwise.
+
+```sql
+VARCHAR s2_is_valid_reason(geog GEOGRAPHY)
+```
+
+#### Example
+
+```sql
+SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 1 1)')) AS valid;
+--┌─────────┐
+--│  valid  │
+--│ varchar │
+--├─────────┤
+--│         │
+--└─────────┘
+
+SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)')) AS valid;
+--┌────────────────────────────────┐
+--│             valid              │
+--│            varchar             │
+--├────────────────────────────────┤
+--│ Vertices 0 and 1 are identical │
+--└────────────────────────────────┘
 ```
 
 ### s2_isempty
@@ -1041,6 +1106,56 @@ Returns the geography from a WKT string.
 GEOGRAPHY s2_geogfromtext(wkt VARCHAR)
 ```
 
+#### Description
+
+This is an alias for the cast from VARCHAR to GEOGRAPHY. This
+function assumes spherical edges.
+
+#### Example
+
+```sql
+SELECT s2_geogfromtext('POINT (0 1)');
+--┌────────────────────────────────┐
+--│ s2_geogfromtext('POINT (0 1)') │
+--│           geography            │
+--├────────────────────────────────┤
+--│ POINT (0 1)                    │
+--└────────────────────────────────┘
+
+SELECT 'POINT (0 1)'::GEOGRAPHY;
+--┌──────────────────────────────────┐
+--│ CAST('POINT (0 1)' AS GEOGRAPHY) │
+--│            geography             │
+--├──────────────────────────────────┤
+--│ POINT (0 1)                      │
+--└──────────────────────────────────┘
+```
+
+### s2_geogfromtext_novalidate
+
+Returns the geography from a WKT string skipping validation.
+
+```sql
+GEOGRAPHY s2_geogfromtext_novalidate(wkt VARCHAR)
+```
+
+#### Description
+
+This is useful to determine which of some set of geometries is not valid and
+why.
+
+#### Example
+
+```sql
+SELECT s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)');
+--┌──────────────────────────────────────────────────────────┐
+--│ s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)') │
+--│                        geography                         │
+--├──────────────────────────────────────────────────────────┤
+--│ LINESTRING (0 0, 0 0, 0.9999999999999998 1)              │
+--└──────────────────────────────────────────────────────────┘
+```
+
 ### s2_geogfromwkb
 
 Converts a WKB blob to a geography.
@@ -1066,6 +1181,33 @@ SELECT s2_geogfromwkb(s2_aswkb(s2_data_city('Toronto'))) as geog;
 --├────────────────────────────────┤
 --│ POINT (-79.4219667 43.7019257) │
 --└────────────────────────────────┘
+```
+
+### s2_geogfromwkb_novalidate
+
+Returns the geography from a WKB blob skipping validation.
+
+```sql
+GEOGRAPHY s2_geogfromwkb_novalidate(wkb BLOB)
+```
+
+#### Description
+
+This is useful to determine which of some set of geometries is not valid and
+why (or to help make them valid).
+
+#### Example
+
+```sql
+SELECT s2_geogfromwkb_novalidate(
+  s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)').s2_aswkb()
+);
+--┌───────────────────────────────────────────────────────────────────────────────────────────────┐
+--│ s2_geogfromwkb_novalidate(s2_aswkb(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)'))) │
+--│                                           geography                                           │
+--├───────────────────────────────────────────────────────────────────────────────────────────────┤
+--│ LINESTRING (0 0, 0 0, 0.9999999999999997 1)                                                   │
+--└───────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### s2_prepare

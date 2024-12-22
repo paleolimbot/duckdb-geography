@@ -16,6 +16,27 @@ SELECT s2_isempty('POINT (0 1)'::GEOGRAPHY)
 ----
 false
 
+# Validation
+query I
+SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 1 1)'));
+----
+true
+
+query I
+SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)'));
+----
+false
+
+query I
+SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 1 1)')) = '';
+----
+true
+
+query I
+SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)'));
+----
+Vertices 0 and 1 are identical
+
 # Area
 query I
 SELECT s2_area('POINT EMPTY'::GEOGRAPHY)

@@ -49,6 +49,107 @@ struct S2IsEmpty {
   }
 };
 
+struct S2IsValid {
+  static void Register(DatabaseInstance& instance) {
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_is_valid", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::BOOLEAN);
+            variant.SetFunction(ExecuteFn);
+          });
+
+          func.SetDescription(R"(
+Returns true if the geography is valid.
+
+The most common reasons for invalid geographies are repeated points,
+an inadequate number of points, and/or crossing edges.
+)");
+          func.SetExample(R"(
+SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 1 1)')) AS valid;
+----
+SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)')) AS valid;
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+  }
+
+  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    Execute(args.data[0], result, args.size());
+  }
+
+  static void Execute(Vector& source, Vector& result, idx_t count) {
+    GeographyDecoder decoder;
+    S2Error error;
+
+    UnaryExecutor::Execute<string_t, bool>(source, result, count, [&](string_t geog_str) {
+      decoder.DecodeTag(geog_str);
+      if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+        return true;
+      } else if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+        return true;
+      }
+
+      auto geog = decoder.Decode(geog_str);
+      return !s2geography::s2_find_validation_error(*geog, &error);
+    });
+  }
+};
+
+struct S2IsValidReason {
+  static void Register(DatabaseInstance& instance) {
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_is_valid_reason", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::VARCHAR);
+            variant.SetFunction(ExecuteFn);
+          });
+
+          func.SetDescription(R"(
+Returns the error string for invalid geographies or the empty string ("") otherwise.
+)");
+          func.SetExample(R"(
+SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 1 1)')) AS valid;
+----
+SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)')) AS valid;
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+  }
+
+  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    Execute(args.data[0], result, args.size());
+  }
+
+  static void Execute(Vector& source, Vector& result, idx_t count) {
+    GeographyDecoder decoder;
+    S2Error error;
+
+    UnaryExecutor::Execute<string_t, string_t>(
+        source, result, count, [&](string_t geog_str) {
+          decoder.DecodeTag(geog_str);
+          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+            return string_t{""};
+          } else if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+            return string_t{""};
+          }
+
+          auto geog = decoder.Decode(geog_str);
+          error.Clear();
+          if (!s2geography::s2_find_validation_error(*geog, &error)) {
+            return string_t{""};
+          } else {
+            return StringVector::AddString(result, error.text());
+          }
+        });
+  }
+};
+
 struct S2Area {
   static void Register(DatabaseInstance& instance) {
     FunctionBuilder::RegisterScalar(instance, "s2_area", [](ScalarFunctionBuilder& func) {
@@ -313,6 +414,8 @@ SELECT s2_y('POINT (-64 45)'::GEOGRAPHY);
 
 void RegisterS2GeographyAccessors(DatabaseInstance& instance) {
   S2IsEmpty::Register(instance);
+  S2IsValid::Register(instance);
+  S2IsValidReason::Register(instance);
   S2Area::Register(instance);
   S2Perimieter::Register(instance);
   S2Length::Register(instance);
