@@ -3,6 +3,8 @@
 #include "duckdb/main/extension_util.hpp"
 
 #include "s2/s2cell_union.h"
+#include "s2/s2closest_edge_query.h"
+#include "s2/s2earth.h"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
@@ -16,6 +18,36 @@ namespace duckdb {
 namespace duckdb_s2 {
 
 namespace {
+using UniqueGeography = std::unique_ptr<s2geography::Geography>;
+
+// Handle the case where we've already computed the index on one or both
+// of the sides in advance
+template <typename ShapeIndexFilter>
+static auto DispatchShapeIndexFilter(UniqueGeography lhs, UniqueGeography rhs,
+                                     ShapeIndexFilter&& filter) {
+  if (lhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX &&
+      rhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
+    auto lhs_index =
+        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(lhs.get());
+    auto rhs_index =
+        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(rhs.get());
+    return filter(lhs_index->ShapeIndex(), rhs_index->ShapeIndex());
+  } else if (lhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
+    auto lhs_index =
+        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(lhs.get());
+    s2geography::ShapeIndexGeography rhs_index(*rhs);
+    return filter(lhs_index->ShapeIndex(), rhs_index.ShapeIndex());
+  } else if (rhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
+    s2geography::ShapeIndexGeography lhs_index(*lhs);
+    auto rhs_index =
+        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(rhs.get());
+    return filter(lhs_index.ShapeIndex(), rhs_index->ShapeIndex());
+  } else {
+    s2geography::ShapeIndexGeography lhs_index(*lhs);
+    s2geography::ShapeIndexGeography rhs_index(*rhs);
+    return filter(lhs_index.ShapeIndex(), rhs_index.ShapeIndex());
+  }
+}
 
 struct S2BinaryIndexOp {
   static void Register(DatabaseInstance& instance) {
@@ -196,42 +228,11 @@ SELECT s2_union(
         });
   }
 
-  using UniqueGeography = std::unique_ptr<s2geography::Geography>;
-
   static void ExecuteMayIntersectFn(DataChunk& args, ExpressionState& state,
                                     Vector& result) {
     return ExecutePredicateFn(
         args, state, result,
         [](UniqueGeography lhs, UniqueGeography rhs) { return true; });
-  }
-
-  // Handle the case where we've already computed the index on one or both
-  // of the sides in advance
-  template <typename ShapeIndexFilter>
-  static auto DispatchShapeIndexFilter(UniqueGeography lhs, UniqueGeography rhs,
-                                       ShapeIndexFilter&& filter) {
-    if (lhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX &&
-        rhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
-      auto lhs_index =
-          reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(lhs.get());
-      auto rhs_index =
-          reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(rhs.get());
-      return filter(lhs_index->ShapeIndex(), rhs_index->ShapeIndex());
-    } else if (lhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
-      auto lhs_index =
-          reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(lhs.get());
-      s2geography::ShapeIndexGeography rhs_index(*rhs);
-      return filter(lhs_index->ShapeIndex(), rhs_index.ShapeIndex());
-    } else if (rhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
-      s2geography::ShapeIndexGeography lhs_index(*lhs);
-      auto rhs_index =
-          reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(rhs.get());
-      return filter(lhs_index.ShapeIndex(), rhs_index->ShapeIndex());
-    } else {
-      s2geography::ShapeIndexGeography lhs_index(*lhs);
-      s2geography::ShapeIndexGeography rhs_index(*rhs);
-      return filter(lhs_index.ShapeIndex(), rhs_index.ShapeIndex());
-    }
   }
 
   static void ExecuteIntersectsFn(DataChunk& args, ExpressionState& state,
@@ -462,10 +463,78 @@ SELECT s2_union(
   }
 };
 
+struct S2Distance {
+  static void Register(DatabaseInstance& instance) {
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_distance", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog1", Types::GEOGRAPHY());
+            variant.AddParameter("geog2", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::DOUBLE);
+            variant.SetFunction(ExecuteFn);
+          });
+
+          func.SetDescription(R"(
+Calculate the shortest distance between two geographies.
+)");
+          func.SetExample(R"(
+SELECT s2_distance(s2_data_cities('Vancouver'), s2_data_cities('Toronto'));
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+  }
+
+  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    Execute(args.data[0], args.data[1], result, args.size());
+  }
+
+  static void Execute(Vector& lhs, Vector& rhs, Vector& result, idx_t count) {
+    GeographyDecoder lhs_decoder;
+    GeographyDecoder rhs_decoder;
+
+    BinaryExecutor::Execute<string_t, string_t, double>(
+        lhs, rhs, result, count, [&](string_t geog1_str, string_t geog2_str) {
+          lhs_decoder.DecodeTag(geog1_str);
+          rhs_decoder.DecodeTag(geog2_str);
+
+          // If either geograpy is empty, the result is Inf
+          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty ||
+              rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+            return std::numeric_limits<double>::infinity();
+          }
+
+          // If we have two snapped cell centers, just calculate the distance directly
+          if (lhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER &&
+              rhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+            S2CellId cell_id1(LittleEndian::Load64(geog1_str.GetData() + 4));
+            S2CellId cell_id2(LittleEndian::Load64(geog2_str.GetData() + 4));
+            S1ChordAngle distance(cell_id1.ToPoint(), cell_id2.ToPoint());
+            return distance.radians() * S2Earth::RadiusMeters();
+          }
+
+          // Otherwise, decode and use s2_distance()
+          auto geog1 = lhs_decoder.Decode(geog1_str);
+          auto geog2 = lhs_decoder.Decode(geog1_str);
+
+          return DispatchShapeIndexFilter(
+              std::move(geog1), std::move(geog2),
+              [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
+                S2ClosestEdgeQuery query(&lhs);
+                S2MinDistanceShapeIndexTarget target(&rhs);
+                return query.FindClosestEdge(&target).distance().radians() *
+                       S2Earth::RadiusMeters();
+              });
+        });
+  }
+};
+
 }  // namespace
 
 void RegisterS2GeographyPredicates(DatabaseInstance& instance) {
   S2BinaryIndexOp::Register(instance);
+  S2Distance::Register(instance);
 }
 
 }  // namespace duckdb_s2
