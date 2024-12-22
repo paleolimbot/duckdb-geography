@@ -39,6 +39,7 @@
 | [`s2_geogfromtext`](#s2_geogfromtext) | Returns the geography from a WKT string.|
 | [`s2_geogfromtext_novalidate`](#s2_geogfromtext_novalidate) | Returns the geography from a WKT string skipping validation.|
 | [`s2_geogfromwkb`](#s2_geogfromwkb) | Converts a WKB blob to a geography.|
+| [`s2_geogfromwkb_novalidate`](#s2_geogfromwkb_novalidate) | Returns the geography from a WKB blob skipping validation.|
 | [`s2_prepare`](#s2_prepare) | Prepares a geography for faster predicate and overlay operations.|
 | [`s2_data_city`](#s2_data_city) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
 | [`s2_data_country`](#s2_data_country) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
@@ -1180,6 +1181,33 @@ SELECT s2_geogfromwkb(s2_aswkb(s2_data_city('Toronto'))) as geog;
 --├────────────────────────────────┤
 --│ POINT (-79.4219667 43.7019257) │
 --└────────────────────────────────┘
+```
+
+### s2_geogfromwkb_novalidate
+
+Returns the geography from a WKB blob skipping validation.
+
+```sql
+GEOGRAPHY s2_geogfromwkb_novalidate(wkb BLOB)
+```
+
+#### Description
+
+This is useful to determine which of some set of geometries is not valid and
+why (or to help make them valid).
+
+#### Example
+
+```sql
+SELECT s2_geogfromwkb_novalidate(
+  s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)').s2_aswkb()
+);
+--┌───────────────────────────────────────────────────────────────────────────────────────────────┐
+--│ s2_geogfromwkb_novalidate(s2_aswkb(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)'))) │
+--│                                           geography                                           │
+--├───────────────────────────────────────────────────────────────────────────────────────────────┤
+--│ LINESTRING (0 0, 0 0, 0.9999999999999997 1)                                                   │
+--└───────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### s2_prepare
