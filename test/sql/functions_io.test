@@ -33,6 +33,12 @@ SELECT ('POINT (-64 45)'::GEOGRAPHY).s2_aswkb().s2_geogfromwkb().s2_format(6)
 ----
 POINT (-64 45)
 
+# Read WKB skipping validation
+query I
+SELECT s2_geogfromwkb_novalidate(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)').s2_aswkb()).s2_format(6);
+----
+LINESTRING (0 0, 0 0, 1 1)
+
 # Prepare of small geographies doesn't trigger an index
 query I
 SELECT ('POINT (30 10)'::GEOGRAPHY).s2_prepare().s2_format(6);
