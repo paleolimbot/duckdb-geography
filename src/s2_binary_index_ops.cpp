@@ -5,6 +5,7 @@
 #include "s2/s2cell_union.h"
 #include "s2/s2closest_edge_query.h"
 #include "s2/s2earth.h"
+#include "s2/s2furthest_edge_query.h"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
@@ -471,14 +472,34 @@ struct S2Distance {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
             variant.SetReturnType(LogicalType::DOUBLE);
-            variant.SetFunction(ExecuteFn);
+            variant.SetFunction(ExecuteDistanceFn);
           });
 
           func.SetDescription(R"(
 Calculate the shortest distance between two geographies.
 )");
           func.SetExample(R"(
-SELECT s2_distance(s2_data_cities('Vancouver'), s2_data_cities('Toronto'));
+SELECT s2_distance(s2_data_city('Vancouver'), s2_data_country('United States of America'));
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_max_distance", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog1", Types::GEOGRAPHY());
+            variant.AddParameter("geog2", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::DOUBLE);
+            variant.SetFunction(ExecuteMaxDistanceFn);
+          });
+
+          func.SetDescription(R"(
+Calculate the farthest distance between two geographies.
+)");
+          func.SetExample(R"(
+SELECT s2_max_distance(s2_data_city('Vancouver'), s2_data_country('United States of America'));
 )");
 
           func.SetTag("ext", "geography");
@@ -486,11 +507,30 @@ SELECT s2_distance(s2_data_cities('Vancouver'), s2_data_cities('Toronto'));
         });
   }
 
-  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    Execute(args.data[0], args.data[1], result, args.size());
+  static inline void ExecuteDistanceFn(DataChunk& args, ExpressionState& state,
+                                       Vector& result) {
+    Execute(args.data[0], args.data[1], result, args.size(),
+            [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
+              S2ClosestEdgeQuery query(&lhs);
+              S2ClosestEdgeQuery::ShapeIndexTarget target(&rhs);
+              return query.FindClosestEdge(&target).distance().radians() *
+                     S2Earth::RadiusMeters();
+            });
   }
 
-  static void Execute(Vector& lhs, Vector& rhs, Vector& result, idx_t count) {
+  static inline void ExecuteMaxDistanceFn(DataChunk& args, ExpressionState& state,
+                                          Vector& result) {
+    Execute(args.data[0], args.data[1], result, args.size(),
+            [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
+              S2FurthestEdgeQuery query(&lhs);
+              S2FurthestEdgeQuery::ShapeIndexTarget target(&rhs);
+              return query.FindFurthestEdge(&target).distance().radians() *
+                     S2Earth::RadiusMeters();
+            });
+  }
+
+  template <typename Op>
+  static void Execute(Vector& lhs, Vector& rhs, Vector& result, idx_t count, Op&& op) {
     GeographyDecoder lhs_decoder;
     GeographyDecoder rhs_decoder;
 
@@ -499,7 +539,7 @@ SELECT s2_distance(s2_data_cities('Vancouver'), s2_data_cities('Toronto'));
           lhs_decoder.DecodeTag(geog1_str);
           rhs_decoder.DecodeTag(geog2_str);
 
-          // If either geograpy is empty, the result is Inf
+          // If either geography is empty, the result is Inf
           if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty ||
               rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
             return std::numeric_limits<double>::infinity();
@@ -518,14 +558,7 @@ SELECT s2_distance(s2_data_cities('Vancouver'), s2_data_cities('Toronto'));
           auto geog1 = lhs_decoder.Decode(geog1_str);
           auto geog2 = rhs_decoder.Decode(geog2_str);
 
-          return DispatchShapeIndexFilter(
-              std::move(geog1), std::move(geog2),
-              [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
-                S2ClosestEdgeQuery query(&lhs);
-                S2ClosestEdgeQuery::ShapeIndexTarget target(&rhs);
-                return query.FindClosestEdge(&target).distance().radians() *
-                       S2Earth::RadiusMeters();
-              });
+          return DispatchShapeIndexFilter(std::move(geog1), std::move(geog2), op);
         });
   }
 };
