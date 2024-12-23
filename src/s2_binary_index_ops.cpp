@@ -24,8 +24,8 @@ using UniqueGeography = std::unique_ptr<s2geography::Geography>;
 // Handle the case where we've already computed the index on one or both
 // of the sides in advance
 template <typename ShapeIndexFilter>
-static auto DispatchShapeIndexFilter(UniqueGeography lhs, UniqueGeography rhs,
-                                     ShapeIndexFilter&& filter) {
+static auto DispaceShapeIndexOp(UniqueGeography lhs, UniqueGeography rhs,
+                                ShapeIndexFilter&& filter) {
   if (lhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX &&
       rhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
     auto lhs_index =
@@ -243,7 +243,7 @@ SELECT s2_union(
 
     return ExecutePredicateFn(
         args, state, result, [&options](UniqueGeography lhs, UniqueGeography rhs) {
-          return DispatchShapeIndexFilter(
+          return DispaceShapeIndexOp(
               std::move(lhs), std::move(rhs),
               [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
                 return S2BooleanOperation::Intersects(lhs_index, rhs_index, options);
@@ -259,7 +259,7 @@ SELECT s2_union(
 
     return ExecutePredicateFn(
         args, state, result, [&options](UniqueGeography lhs, UniqueGeography rhs) {
-          return DispatchShapeIndexFilter(
+          return DispaceShapeIndexOp(
               std::move(lhs), std::move(rhs),
               [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
                 return S2BooleanOperation::Contains(lhs_index, rhs_index, options);
@@ -273,7 +273,7 @@ SELECT s2_union(
 
     return ExecutePredicateFn(
         args, state, result, [&options](UniqueGeography lhs, UniqueGeography rhs) {
-          return DispatchShapeIndexFilter(
+          return DispaceShapeIndexOp(
               std::move(lhs), std::move(rhs),
               [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
                 return S2BooleanOperation::Equals(lhs_index, rhs_index, options);
@@ -358,7 +358,7 @@ SELECT s2_union(
             return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
           }
 
-          auto geog = DispatchShapeIndexFilter(
+          auto geog = DispaceShapeIndexOp(
               lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str),
               [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
                 return s2geography::s2_boolean_operation(
@@ -401,7 +401,7 @@ SELECT s2_union(
             return StringVector::AddStringOrBlob(result, lhs_str);
           }
 
-          auto geog = DispatchShapeIndexFilter(
+          auto geog = DispaceShapeIndexOp(
               lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str),
               [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
                 return s2geography::s2_boolean_operation(
@@ -439,7 +439,7 @@ SELECT s2_union(
 
           // (No optimization for definitely disjoint binary union)
 
-          auto geog = DispatchShapeIndexFilter(
+          auto geog = DispaceShapeIndexOp(
               lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str),
               [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
                 return s2geography::s2_boolean_operation(
@@ -558,7 +558,7 @@ SELECT s2_max_distance(s2_data_city('Vancouver'), s2_data_country('United States
           auto geog1 = lhs_decoder.Decode(geog1_str);
           auto geog2 = rhs_decoder.Decode(geog2_str);
 
-          return DispatchShapeIndexFilter(std::move(geog1), std::move(geog2), op);
+          return DispaceShapeIndexOp(std::move(geog1), std::move(geog2), op);
         });
   }
 };
