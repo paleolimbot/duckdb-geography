@@ -516,13 +516,13 @@ SELECT s2_distance(s2_data_cities('Vancouver'), s2_data_cities('Toronto'));
 
           // Otherwise, decode and use s2_distance()
           auto geog1 = lhs_decoder.Decode(geog1_str);
-          auto geog2 = lhs_decoder.Decode(geog1_str);
+          auto geog2 = rhs_decoder.Decode(geog2_str);
 
           return DispatchShapeIndexFilter(
               std::move(geog1), std::move(geog2),
               [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
                 S2ClosestEdgeQuery query(&lhs);
-                S2MinDistanceShapeIndexTarget target(&rhs);
+                S2ClosestEdgeQuery::ShapeIndexTarget target(&rhs);
                 return query.FindClosestEdge(&target).distance().radians() *
                        S2Earth::RadiusMeters();
               });
