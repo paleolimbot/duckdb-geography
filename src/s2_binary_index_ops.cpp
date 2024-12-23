@@ -479,7 +479,10 @@ struct S2Distance {
 Calculate the shortest distance between two geographies.
 )");
           func.SetExample(R"(
-SELECT s2_distance(s2_data_city('Vancouver'), s2_data_country('United States of America'));
+SELECT s2_distance(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America')
+) AS distance;
 )");
 
           func.SetTag("ext", "geography");
@@ -499,7 +502,10 @@ SELECT s2_distance(s2_data_city('Vancouver'), s2_data_country('United States of 
 Calculate the farthest distance between two geographies.
 )");
           func.SetExample(R"(
-SELECT s2_max_distance(s2_data_city('Vancouver'), s2_data_country('United States of America'));
+SELECT s2_max_distance(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America')
+) AS distance;
 )");
 
           func.SetTag("ext", "geography");

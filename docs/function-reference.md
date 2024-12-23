@@ -5,10 +5,12 @@
 | --- | --- |
 | [`s2_area`](#s2_area) | Calculate the area of the geography in square meters.|
 | [`s2_dimension`](#s2_dimension) | Calculate the highest dimension element present in the geography.|
+| [`s2_distance`](#s2_distance) | Calculate the shortest distance between two geographies.|
 | [`s2_is_valid`](#s2_is_valid) | Returns true if the geography is valid.|
 | [`s2_is_valid_reason`](#s2_is_valid_reason) | Returns the error string for invalid geographies or the empty string ("") otherwise.|
 | [`s2_isempty`](#s2_isempty) | Returns true if the geography is empty.|
 | [`s2_length`](#s2_length) | Calculate the length of the geography in meters.|
+| [`s2_max_distance`](#s2_max_distance) | Calculate the farthest distance between two geographies.|
 | [`s2_num_points`](#s2_num_points) | Extract the number of vertices in the geography.|
 | [`s2_perimeter`](#s2_perimeter) | Calculate the perimeter of the geography in meters.|
 | [`s2_x`](#s2_x) | Extract the longitude of a point geography.|
@@ -149,6 +151,29 @@ SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::G
 --└────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### s2_distance
+
+Calculate the shortest distance between two geographies.
+
+```sql
+DOUBLE s2_distance(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
+```
+
+#### Example
+
+```sql
+SELECT s2_distance(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America')
+) AS distance;
+--┌───────────────────┐
+--│     distance      │
+--│      double       │
+--├───────────────────┤
+--│ 36920.79814219437 │
+--└───────────────────┘
+```
+
 ### s2_is_valid
 
 Returns true if the geography is valid.
@@ -268,6 +293,29 @@ SELECT s2_length(s2_data_country('Canada')) AS length;
 --├────────┤
 --│    0.0 │
 --└────────┘
+```
+
+### s2_max_distance
+
+Calculate the farthest distance between two geographies.
+
+```sql
+DOUBLE s2_max_distance(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
+```
+
+#### Example
+
+```sql
+SELECT s2_max_distance(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America')
+) AS distance;
+--┌───────────────────┐
+--│     distance      │
+--│      double       │
+--├───────────────────┤
+--│ 4543768.747999884 │
+--└───────────────────┘
 ```
 
 ### s2_num_points
