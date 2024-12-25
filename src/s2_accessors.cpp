@@ -410,6 +410,120 @@ SELECT s2_y('POINT (-64 45)'::GEOGRAPHY);
   }
 };
 
+struct S2Dimension {
+  static void Register(DatabaseInstance& instance) {
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_dimension", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::INTEGER);
+            variant.SetFunction(ExecuteFn);
+          });
+
+          func.SetDescription(R"(
+Calculate the highest dimension element present in the geography.
+
+Points have a dimension of 0; linestrings have a dimension of 1; polygons have
+a dimension of 2. For geography collections, this will return the highest dimension
+value of any element in the collection (e.g., a collection containing a point and
+a polygon will return 2). An empty geography collection returns a value of -1.
+)");
+          func.SetExample(R"(
+SELECT s2_dimension('POINT (0 0)'::GEOGRAPHY);
+----
+SELECT s2_dimension('LINESTRING (0 0, 1 1)'::GEOGRAPHY);
+----
+SELECT s2_dimension(s2_data_country('Canada'));
+----
+SELECT s2_dimension('GEOMETRYCOLLECTION EMPTY');
+----
+SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::GEOGRAPHY);
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+  }
+
+  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    Execute(args.data[0], result, args.size());
+  }
+
+  static void Execute(Vector& source, Vector& result, idx_t count) {
+    GeographyDecoder decoder;
+
+    UnaryExecutor::Execute<string_t, int32_t>(
+        source, result, count, [&](string_t geog_str) {
+          decoder.DecodeTag(geog_str);
+
+          switch (decoder.tag.kind) {
+            case s2geography::GeographyKind::CELL_CENTER:
+            case s2geography::GeographyKind::POINT:
+              return 0;
+            case s2geography::GeographyKind::POLYLINE:
+              return 1;
+            case s2geography::GeographyKind::POLYGON:
+              return 2;
+            default: {
+              auto geog = decoder.Decode(geog_str);
+              return s2geography::s2_dimension(*geog);
+            }
+          }
+        });
+  }
+};
+
+struct S2NumPoints {
+  static void Register(DatabaseInstance& instance) {
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_num_points", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::INTEGER);
+            variant.SetFunction(ExecuteFn);
+          });
+
+          func.SetDescription(R"(
+Extract the number of vertices in the geography.
+)");
+          func.SetExample(R"(
+SELECT s2_num_points(s2_data_country('Fiji'));
+----
+SELECT s2_num_points(s2_data_country('Canada'));
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+  }
+
+  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    Execute(args.data[0], result, args.size());
+  }
+
+  static void Execute(Vector& source, Vector& result, idx_t count) {
+    GeographyDecoder decoder;
+
+    UnaryExecutor::Execute<string_t, int32_t>(
+        source, result, count, [&](string_t geog_str) {
+          decoder.DecodeTag(geog_str);
+
+          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+            return 0;
+          }
+
+          switch (decoder.tag.kind) {
+            case s2geography::GeographyKind::CELL_CENTER:
+              return 1;
+            default: {
+              auto geog = decoder.Decode(geog_str);
+              return s2geography::s2_num_points(*geog);
+            }
+          }
+        });
+  }
+};
+
 }  // namespace
 
 void RegisterS2GeographyAccessors(DatabaseInstance& instance) {
@@ -420,6 +534,8 @@ void RegisterS2GeographyAccessors(DatabaseInstance& instance) {
   S2Perimieter::Register(instance);
   S2Length::Register(instance);
   S2XY::Register(instance);
+  S2Dimension::Register(instance);
+  S2NumPoints::Register(instance);
 }
 
 }  // namespace duckdb_s2
