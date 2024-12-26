@@ -127,11 +127,47 @@ SELECT s2_union('POINT (-64 45)'::GEOGRAPHY, 'POINT (-64 46)'::GEOGRAPHY).s2_for
 ----
 MULTIPOINT ((-64 45), (-64 46))
 
+# Within Distance
+
+# Normal (via S2ShapeIndex)
+query I
+SELECT s2_dwithin(s2_data_city('Vancouver'), s2_data_city('Toronto'), 3000000);
+----
+false
+
+query I
+SELECT s2_dwithin(s2_data_city('Vancouver'), s2_data_city('Toronto'), 4000000);
+----
+true
+
+# Points snapped to cell centers
+query I
+SELECT s2_dwithin(s2_data_city('Vancouver')::S2_CELL_CENTER, s2_data_city('Toronto')::S2_CELL_CENTER, 3000000);
+----
+false
+
+query I
+SELECT s2_dwithin(s2_data_city('Vancouver')::S2_CELL_CENTER, s2_data_city('Toronto')::S2_CELL_CENTER, 4000000);
+----
+true
+
+# Empty LHS
+query I
+SELECT s2_dwithin('POINT EMPTY'::GEOGRAPHY, s2_data_city('Toronto'), 'inf');
+----
+false
+
+# Empty RHS
+query I
+SELECT s2_dwithin(s2_data_city('Toronto'), 'POINT EMPTY'::GEOGRAPHY, 'inf');
+----
+false
+
 # Distance
 
 # Normal (via S2ShapeIndex)
 query I
-SELECT s2_distance(s2_data_city('Vancouver')::S2_CELL_CENTER, s2_data_city('Toronto'));
+SELECT s2_distance(s2_data_city('Vancouver'), s2_data_city('Toronto'));
 ----
 3354018.3461295413
 

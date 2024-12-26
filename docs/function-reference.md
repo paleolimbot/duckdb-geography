@@ -6,6 +6,7 @@
 | [`s2_area`](#s2_area) | Calculate the area of the geography in square meters.|
 | [`s2_dimension`](#s2_dimension) | Calculate the highest dimension element present in the geography.|
 | [`s2_distance`](#s2_distance) | Calculate the shortest distance between two geographies.|
+| [`s2_dwithin`](#s2_dwithin) | Return true if two geographies are within a given distance (in meters).|
 | [`s2_is_valid`](#s2_is_valid) | Returns true if the geography is valid.|
 | [`s2_is_valid_reason`](#s2_is_valid_reason) | Returns the error string for invalid geographies or the empty string ("") otherwise.|
 | [`s2_isempty`](#s2_isempty) | Returns true if the geography is empty.|
@@ -172,6 +173,42 @@ SELECT s2_distance(
 --├───────────────────┤
 --│ 36920.79814219437 │
 --└───────────────────┘
+```
+
+### s2_dwithin
+
+Return true if two geographies are within a given distance (in meters).
+
+```sql
+BOOLEAN s2_dwithin(geog1 GEOGRAPHY, geog2 GEOGRAPHY, distance DOUBLE)
+```
+
+#### Example
+
+```sql
+SELECT s2_dwithin(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America'),
+  30000
+) AS is_within;
+--┌───────────┐
+--│ is_within │
+--│  boolean  │
+--├───────────┤
+--│ false     │
+--└───────────┘
+
+SELECT s2_dwithin(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America'),
+  40000
+) AS is_within;
+--┌───────────┐
+--│ is_within │
+--│  boolean  │
+--├───────────┤
+--│ true      │
+--└───────────┘
 ```
 
 ### s2_is_valid

@@ -464,6 +464,88 @@ SELECT s2_union(
   }
 };
 
+struct S2DWithin {
+  static void Register(DatabaseInstance& instance) {
+    FunctionBuilder::RegisterScalar(
+        instance, "s2_dwithin", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog1", Types::GEOGRAPHY());
+            variant.AddParameter("geog2", Types::GEOGRAPHY());
+            variant.AddParameter("distance", LogicalType::DOUBLE);
+            variant.SetReturnType(LogicalType::BOOLEAN);
+            variant.SetFunction(ExecuteFn);
+          });
+
+          func.SetDescription(R"(
+Return true if two geographies are within a given distance (in meters).
+)");
+          func.SetExample(R"(
+SELECT s2_dwithin(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America'),
+  30000
+) AS is_within;
+----
+SELECT s2_dwithin(
+  s2_data_city('Vancouver'),
+  s2_data_country('United States of America'),
+  40000
+) AS is_within;
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "accessors");
+        });
+  }
+
+  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    Execute(args.data[0], args.data[1], args.data[2], result, args.size());
+  }
+
+  static void Execute(Vector& lhs, Vector& rhs, Vector& dist, Vector& result,
+                      idx_t count) {
+    GeographyDecoder lhs_decoder;
+    GeographyDecoder rhs_decoder;
+
+    TernaryExecutor::Execute<string_t, string_t, double, bool>(
+        lhs, rhs, dist, result, count,
+        [&](string_t geog1_str, string_t geog2_str, double distance_meters) {
+          lhs_decoder.DecodeTag(geog1_str);
+          rhs_decoder.DecodeTag(geog2_str);
+
+          // If either geography is empty, the result is false
+          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty ||
+              rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+            return false;
+          }
+
+          double distance_radians = distance_meters / S2Earth::RadiusMeters();
+
+          // If we have two snapped cell centers, just calculate the distance directly
+          if (lhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER &&
+              rhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+            S2CellId cell_id1(LittleEndian::Load64(geog1_str.GetData() + 4));
+            S2CellId cell_id2(LittleEndian::Load64(geog2_str.GetData() + 4));
+            S1ChordAngle distance(cell_id1.ToPoint(), cell_id2.ToPoint());
+            return distance.radians() <= distance_radians;
+          }
+
+          // Otherwise, decode and use the S2ClosestEdgeQuery
+          auto geog1 = lhs_decoder.Decode(geog1_str);
+          auto geog2 = rhs_decoder.Decode(geog2_str);
+
+          return DispatchShapeIndexOp(
+              std::move(geog1), std::move(geog2),
+              [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
+                S2ClosestEdgeQuery query(&lhs);
+                S2ClosestEdgeQuery::ShapeIndexTarget target(&rhs);
+                return query.IsDistanceLessOrEqual(
+                    &target, S1ChordAngle::Radians(distance_radians));
+              });
+        });
+  }
+};
+
 struct S2Distance {
   static void Register(DatabaseInstance& instance) {
     FunctionBuilder::RegisterScalar(
@@ -574,6 +656,7 @@ SELECT s2_max_distance(
 void RegisterS2GeographyPredicates(DatabaseInstance& instance) {
   S2BinaryIndexOp::Register(instance);
   S2Distance::Register(instance);
+  S2DWithin::Register(instance);
 }
 
 }  // namespace duckdb_s2
