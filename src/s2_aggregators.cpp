@@ -91,6 +91,50 @@ struct S2BoundsRectAgg {
   static bool IgnoreNull() { return true; }
 };
 
+struct ShapeUnionState {
+  MutableS2ShapeIndex* shape_index;
+};
+
+struct S2UnionAgg {
+  template <class STATE>
+  static void Initialize(STATE& state) {
+    state.shape_index = new MutableS2ShapeIndex();
+  }
+
+  template <class STATE>
+  static void Destroy(STATE& state, AggregateInputData&) {
+    delete state.shape_index;
+  }
+
+  template <class STATE, class OP>
+  static void Combine(const STATE& source, STATE& target, AggregateInputData&) {}
+
+  template <class INPUT_TYPE, class STATE, class OP>
+  static void Operation(STATE& state, const INPUT_TYPE& input, AggregateUnaryInput&) {
+    GeographyDecoder decoder;
+    decoder.DecodeTag(input);
+    if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+      return;
+    }
+
+    if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+    } else {
+      auto geog = decoder.Decode(input);
+    }
+  }
+
+  template <class INPUT_TYPE, class STATE, class OP>
+  static void ConstantOperation(STATE& state, const INPUT_TYPE& input,
+                                AggregateUnaryInput& agg, idx_t) {
+    Operation<INPUT_TYPE, STATE, OP>(state, input, agg);
+  }
+
+  template <class T, class STATE>
+  static void Finalize(STATE& state, T& target, AggregateFinalizeData& finalize_data) {}
+
+  static bool IgnoreNull() { return true; }
+};
+
 }  // namespace
 
 void RegisterS2Aggregators(DatabaseInstance& instance) {
