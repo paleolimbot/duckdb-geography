@@ -49,6 +49,8 @@ class GeographyEncoder {
     return string_t{encoder_.base(), static_cast<uint32_t>(encoder_.length())};
   }
 
+  const s2geography::EncodeOptions& options() { return options_; }
+
  private:
   Encoder encoder_{};
   s2geography::EncodeOptions options_{};

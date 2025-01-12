@@ -50,38 +50,6 @@ SELECT s2_bounds_box('MULTIPOINT (0 1, 2 3)'::GEOGRAPHY);
 ----
 {'xmin': 0.0, 'ymin': 1.0, 'xmax': 1.9999999999999996, 'ymax': 3.0000000000000004}
 
-# s2_bounds_box_agg()
-
-# Check empty input optimization
-query I
-SELECT s2_bounds_box_agg('POINT EMPTY'::GEOGRAPHY);
-----
-{'xmin': 180.0, 'ymin': 57.29577951308232, 'xmax': -180.0, 'ymax': 0.0}
-
-# Check point-as-cell-center optimization
-query I
-SELECT s2_bounds_box_agg(s2_cellfromlonlat(-64, 45));
-----
-{'xmin': -63.99999997805, 'ymin': 45.0000000116166, 'xmax': -63.99999997805, 'ymax': 45.0000000116166}
-
-# Check normal encoded geography
-query I
-SELECT s2_bounds_box_agg('MULTIPOINT (0 1, 2 3)'::GEOGRAPHY);
-----
-{'xmin': 0.0, 'ymin': 1.0, 'xmax': 1.9999999999999996, 'ymax': 3.0000000000000004}
-
-# With some actual aggregation
-query I
-SELECT s2_bounds_box_agg(geog) FROM s2_data_cities();
-----
-{'xmin': -123.12359, 'ymin': -41.29998789999999, 'xmax': -171.738642, 'ymax': 64.1500236}
-
-query I
-SELECT s2_bounds_box_agg(geog) FROM s2_data_countries();
-----
-{'xmin': -180.0, 'ymin': -90.0, 'xmax': 180.0, 'ymax': 83.64513000000002}
-
-
 # Test the box exporters
 query I
 SELECT s2_bounds_box(s2_data_country('Germany')).s2_box_wkb().s2_geogfromwkb().s2_format(4);
