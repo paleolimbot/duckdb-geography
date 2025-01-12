@@ -2,10 +2,12 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_util.hpp"
 
+#include "global_options.hpp"
 #include "s2/s2latlng_rect.h"
 
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
+#include "s2geography/build.h"
 
 namespace duckdb {
 
@@ -92,35 +94,51 @@ struct S2BoundsRectAgg {
 };
 
 struct ShapeUnionState {
-  MutableS2ShapeIndex* shape_index;
+  // A sequence of EncodedShapeIndexGeography
+  // Would be better to use something DuckDB-Allocated here
+  idx_t num_geographies;
+  Encoder* encoder;
 };
 
 struct S2UnionAgg {
   template <class STATE>
   static void Initialize(STATE& state) {
-    state.shape_index = new MutableS2ShapeIndex();
+    state.num_geographies = 0;
+    state.encoder = new Encoder();
   }
 
   template <class STATE>
   static void Destroy(STATE& state, AggregateInputData&) {
-    delete state.shape_index;
+    delete state.encoder;
   }
 
   template <class STATE, class OP>
-  static void Combine(const STATE& source, STATE& target, AggregateInputData&) {}
+  static void Combine(const STATE& source, STATE& target, AggregateInputData&) {
+    target.encoder->Ensure(source.encoder->length());
+    target.encoder->putn(source.encoder->base(), source.encoder->length());
+    target.num_geographies += source.num_geographies;
+  }
 
   template <class INPUT_TYPE, class STATE, class OP>
   static void Operation(STATE& state, const INPUT_TYPE& input, AggregateUnaryInput&) {
     GeographyDecoder decoder;
+    GeographyEncoder encoder;
+
     decoder.DecodeTag(input);
     if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
       return;
     }
 
-    if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+    if (decoder.tag.kind == s2geography::GeographyKind::SHAPE_INDEX) {
+      state.encoder->Ensure(input.GetSize());
+      state.encoder->putn(input.GetData(), input.GetSize());
     } else {
       auto geog = decoder.Decode(input);
+      s2geography::ShapeIndexGeography index_geog(*geog);
+      index_geog.EncodeTagged(state.encoder, encoder.options());
     }
+
+    state.num_geographies += 1;
   }
 
   template <class INPUT_TYPE, class STATE, class OP>
@@ -130,7 +148,27 @@ struct S2UnionAgg {
   }
 
   template <class T, class STATE>
-  static void Finalize(STATE& state, T& target, AggregateFinalizeData& finalize_data) {}
+  static void Finalize(STATE& state, T& target, AggregateFinalizeData& finalize_data) {
+    Decoder decoder(state.encoder->base(), state.encoder->length());
+    std::unique_ptr<s2geography::Geography> result =
+        std::make_unique<s2geography::GeographyCollection>();
+
+    s2geography::GlobalOptions options;
+    InitGlobalOptions(&options);
+
+    for (idx_t i = 0; i < state.num_geographies; ++i) {
+      auto geog = s2geography::Geography::DecodeTagged(&decoder);
+      auto shape_index_geog =
+          reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(geog.get());
+      s2geography::ShapeIndexGeography result_indexed(*result);
+      result = s2geography::s2_boolean_operation(
+          result_indexed.ShapeIndex(), shape_index_geog->ShapeIndex(),
+          S2BooleanOperation::OpType::UNION, options);
+    }
+
+    GeographyEncoder encoder;
+    target = encoder.Encode(*result);
+  }
 
   static bool IgnoreNull() { return true; }
 };
@@ -138,13 +176,17 @@ struct S2UnionAgg {
 }  // namespace
 
 void RegisterS2Aggregators(DatabaseInstance& instance) {
-  auto function = AggregateFunction::UnaryAggregate<BoundsAggState, string_t, string_t,
-                                                    S2BoundsRectAgg>(Types::GEOGRAPHY(),
-                                                                     Types::S2_BOX());
+  auto fn_bounds = AggregateFunction::UnaryAggregate<BoundsAggState, string_t, string_t,
+                                                     S2BoundsRectAgg>(Types::GEOGRAPHY(),
+                                                                      Types::S2_BOX());
+  fn_bounds.name = "s2_bounds_box_agg";
+  ExtensionUtil::RegisterFunction(instance, fn_bounds);
 
-  // Register the function
-  function.name = "s2_bounds_box_agg";
-  ExtensionUtil::RegisterFunction(instance, function);
+  auto fn_union =
+      AggregateFunction::UnaryAggregate<ShapeUnionState, string_t, string_t, S2UnionAgg>(
+          Types::GEOGRAPHY(), Types::GEOGRAPHY());
+  fn_union.name = "s2_union_agg";
+  ExtensionUtil::RegisterFunction(instance, fn_union);
 }
 
 }  // namespace duckdb_s2
