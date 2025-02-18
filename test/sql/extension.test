@@ -15,5 +15,7 @@ query I
 SELECT dependency FROM s2_dependencies() ORDER BY dependency
 ----
 abseil-cpp
+geoarrow
+nanoarrow
 openssl
 s2geometry

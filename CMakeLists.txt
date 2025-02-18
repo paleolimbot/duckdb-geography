@@ -25,9 +25,9 @@ FetchContent_Declare(
 set(GEOARROW_NAMESPACE DuckDBGeography)
 FetchContent_Declare(
   geoarrow
-  URL https://github.com/geoarrow/geoarrow-c/archive/cd6985a2c5268244e07c92184b0b216ec2ec8722.zip
+  URL https://github.com/geoarrow/geoarrow-c/archive/4a755ea6a09b8e842a9ccaef6ef05e6e3870f973.zip
   URL_HASH
-    SHA256=e0badbe4db14928a0897a423672bd5fac4bcfd3af49ccb862a2357db061d4ef5)
+    SHA256=7d9caab1b55cc116b52b4eae34f392bc323a6f2e8afdd9c2a586957b99020f90)
 
 FetchContent_MakeAvailable(nanoarrow)
 FetchContent_MakeAvailable(geoarrow)

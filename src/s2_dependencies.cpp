@@ -7,6 +7,9 @@
 #include <openssl/opensslv.h>
 #include <s2geography.h>
 
+#include "geoarrow/geoarrow.h"
+#include "nanoarrow/nanoarrow.h"
+
 namespace duckdb {
 
 namespace duckdb_s2 {
@@ -49,7 +52,14 @@ void S2DependenciesScan(ClientContext& context, TableFunctionInput& data_p,
                   std::string() + std::to_string(S2_VERSION_MAJOR) + "." +
                       std::to_string(S2_VERSION_MINOR) + "." +
                       std::to_string(S2_VERSION_PATCH));
-  output.SetCardinality(3);
+
+  output.SetValue(0, 3, "nanoarrow");
+  output.SetValue(1, 3, std::string() + ArrowNanoarrowVersion());
+
+  output.SetValue(0, 4, "geoarrow");
+  output.SetValue(1, 4, std::string() + GeoArrowVersion());
+
+  output.SetCardinality(5);
   data.finished = true;
 }
 
