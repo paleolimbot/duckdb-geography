@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
+include(FetchContent)
+
 # Set extension name here
 set(TARGET_NAME geography)
 
@@ -12,6 +14,23 @@ set(CMAKE_CXX_STANDARD 17)
 # from vcpkg.json to prevent needlessly installing it..
 find_package(OpenSSL REQUIRED)
 find_package(absl REQUIRED)
+
+set(NANOARROW_NAMESPACE DuckDBGeography)
+FetchContent_Declare(
+  nanoarrow
+  URL https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.6.0.zip
+  URL_HASH
+    SHA256=73b3235453902c9e92b5e942683d02d764a2aea1f999c03bf4a747c90df2f505)
+
+set(GEOARROW_NAMESPACE DuckDBGeography)
+FetchContent_Declare(
+  geoarrow
+  URL https://github.com/geoarrow/geoarrow-c/archive/791682927ab8541be189b7dbe673edeb478a0bae.zip
+  URL_HASH
+    SHA256=7c529a5224745b4b7fd00b677e41d4ef47a7c2c72f6fa337318193f656fd4ef2)
+
+FetchContent_MakeAvailable(nanoarrow)
+FetchContent_MakeAvailable(geoarrow)
 
 # S2's CMake is pretty awful so we just build the library ourselves
 add_library(
@@ -199,10 +218,24 @@ build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
 # Link OpenSSL in both the static library as the loadable extension
-target_link_libraries(${EXTENSION_NAME} s2geography s2 OpenSSL::SSL
-                      OpenSSL::Crypto ${S2_EXTRA_OPENSSL_LIBS})
-target_link_libraries(${LOADABLE_EXTENSION_NAME} s2geography s2 OpenSSL::SSL
-                      OpenSSL::Crypto ${S2_EXTRA_OPENSSL_LIBS})
+target_link_libraries(
+  ${EXTENSION_NAME}
+  s2geography
+  s2
+  OpenSSL::SSL
+  OpenSSL::Crypto
+  ${S2_EXTRA_OPENSSL_LIBS}
+  geoarrow::geoarrow
+  nanoarrow::nanoarrow)
+target_link_libraries(
+  ${LOADABLE_EXTENSION_NAME}
+  s2geography
+  s2
+  OpenSSL::SSL
+  OpenSSL::Crypto
+  ${S2_EXTRA_OPENSSL_LIBS}
+  geoarrow::geoarrow
+  nanoarrow::nanoarrow)
 
 install(
   TARGETS ${EXTENSION_NAME} s2geography s2
