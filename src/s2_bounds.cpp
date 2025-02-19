@@ -4,11 +4,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_util.hpp"
 
-#include "s2/s2earth.h"
-#include "s2/s2region_coverer.h"
-#include "s2geography/accessors.h"
-
 #include "s2/s2cell_union.h"
+#include "s2/s2region_coverer.h"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
