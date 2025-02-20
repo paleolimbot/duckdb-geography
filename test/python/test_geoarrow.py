@@ -3,6 +3,7 @@ import json
 
 import pyarrow as pa
 import pytest
+import geoarrow.pyarrow as ga
 
 import duckdb
 
@@ -18,9 +19,12 @@ def test_basic_export(geoarrow_con):
     tab = geoarrow_con.sql(
         """SELECT s2_geogfromtext('POINT (0 1)') as geom;"""
     ).to_arrow_table()
-    metadata = tab.schema.field("geom").metadata
-    assert metadata[b"ARROW:extension:name"] == b"geoarrow.wkb"
-    params = json.loads(metadata[b"ARROW:extension:metadata"])
+
+    pa_type = tab["geom"].type
+    assert isinstance(pa_type, ga.GeometryExtensionType)
+    assert pa_type._extension_name == "geoarrow.wkb"
+    assert pa_type.edge_type == ga.EdgeType.SPHERICAL
+    params = json.loads(pa_type.__arrow_ext_serialize__())
     assert params["edges"] == "spherical"
     assert params["crs"] == "OGC:CRS84"
 
@@ -64,7 +68,7 @@ def test_reject_planar_edges(geoarrow_con):
         geoarrow_con.sql("""SELECT * from geo_table""")
 
 
-def test_roundtrip_segments(geoarrow_con):
+def test_roundtrip_countries(geoarrow_con):
     countries_file = HERE.parent.parent / "data" / "countries.tsv"
     geo_table = geoarrow_con.sql(
         f"""SELECT s2_geogfromtext(geog) as geog1 FROM '{countries_file}'"""
@@ -81,3 +85,17 @@ def test_roundtrip_segments(geoarrow_con):
         """SELECT sum(abs(s2_area(geog1) - s2_area(geog2)) < 0.1)::BIGINT AS sum_eq FROM table_both"""
     ).to_arrow_table()
     assert areas_equal == pa.table({"sum_eq": [len(table_both)]})
+
+
+def test_spherely_interop(geoarrow_con):
+    import spherely
+    import numpy as np
+
+    geo_table = geoarrow_con.sql(
+        """SELECT geog, s2_area(geog) as area FROM s2_data_countries()"""
+    ).to_arrow_table()
+    geogs = spherely.from_geoarrow(geo_table["geog"].chunk(0))
+    np.testing.assert_array_almost_equal(
+        spherely.area(geogs), geo_table["area"].to_numpy(),
+        decimal=1
+    )

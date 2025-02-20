@@ -1,4 +1,5 @@
 duckdb
 pytest
 spherely
-geoarrow-pyarrow
+numpy
+pyarrow
