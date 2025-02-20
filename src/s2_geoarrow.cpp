@@ -20,14 +20,9 @@ struct GeoArrowWKB {
   static unique_ptr<ArrowType> GetType(const ArrowSchema& schema,
                                        const ArrowSchemaMetadata& schema_metadata) {
     // Validate extension metadata. This metadata also contains a CRS, which we drop
-    // because the GEOMETRY type does not implement a CRS at the type level.
+    // because the GEOGRAPHY type does not implement a CRS at the type level.
     string extension_metadata =
         schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_METADATA_KEY);
-    if (!extension_metadata.empty()) {
-      throw NotImplementedException(
-          "Can't import planar edges as GEOGRAPHY (metadata empty)");
-    }
-
     auto data_type =
         geoarrow::GeometryDataType::Make(GEOARROW_TYPE_WKB, extension_metadata);
     if (data_type.edge_type() != GEOARROW_EDGE_TYPE_SPHERICAL) {
@@ -54,8 +49,11 @@ struct GeoArrowWKB {
   static void PopulateSchema(DuckDBArrowSchemaHolder& root_holder, ArrowSchema& schema,
                              const LogicalType& type, ClientContext& context,
                              const ArrowTypeExtension& extension) {
-    auto data_type =
-        geoarrow::Wkb().WithEdgeType(GEOARROW_EDGE_TYPE_SPHERICAL).WithCrsLonLat();
+    // Should really use WithCrsLonLat() here, but DuckDB itself chokes on non key/value
+    // metadata https://github.com/duckdb/duckdb/issues/16321
+    auto data_type = geoarrow::Wkb()
+                         .WithEdgeType(GEOARROW_EDGE_TYPE_SPHERICAL)
+                         .WithCrs("OGC:CRS84", GEOARROW_CRS_TYPE_AUTHORITY_CODE);
 
     ArrowSchemaMetadata schema_metadata;
     schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME,

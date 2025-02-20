@@ -1,3 +1,8 @@
 {
-    "cmake.sourceDirectory": "${workspaceFolder}/duckdb"
+    "cmake.sourceDirectory": "${workspaceFolder}/duckdb",
+    "python.testing.pytestArgs": [
+        "test"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }

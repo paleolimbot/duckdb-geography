@@ -1,0 +1,4 @@
+duckdb
+pytest
+spherely
+geoarrow-pyarrow
