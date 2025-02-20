@@ -1,0 +1,5 @@
+duckdb
+pytest
+spherely
+numpy
+pyarrow

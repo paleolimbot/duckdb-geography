@@ -206,7 +206,8 @@ set(EXTENSION_SOURCES
     src/s2_binary_index_ops.cpp
     src/s2_data.cpp
     src/s2_accessors.cpp
-    src/s2_bounds.cpp)
+    src/s2_bounds.cpp
+    src/s2_geoarrow.cpp)
 
 # Workaround for difference between v1.1.3 and main with respect to
 # FunctionEntry fields

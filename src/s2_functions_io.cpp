@@ -311,7 +311,9 @@ SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
     Execute(args.data[0], result, args.size());
   }
 
-  static inline void Execute(Vector& source, Vector& result, idx_t count) {
+  static inline void Execute(Vector& source, Vector& result, idx_t count,
+                             const s2geography::geoarrow::ExportOptions& options =
+                                 s2geography::geoarrow::ExportOptions()) {
     GeographyDecoder decoder;
     s2geography::WKBWriter writer;
 
@@ -388,6 +390,16 @@ LIMIT 5;
         });
   }
 };
+
+void ImportWKBToGeography(Vector& source, Vector& result, idx_t count,
+                          const s2geography::geoarrow::ImportOptions& options) {
+  S2GeogFromWKB::Execute(source, result, count, options);
+}
+
+void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count,
+                          const s2geography::geoarrow::ExportOptions& options) {
+  S2AsWKB::Execute(source, result, count, options);
+}
 
 void RegisterS2GeographyFunctionsIO(DatabaseInstance& instance) {
   S2GeogFromText::Register(instance);
