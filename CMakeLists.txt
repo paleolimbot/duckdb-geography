@@ -18,14 +18,14 @@ find_package(absl REQUIRED)
 set(NANOARROW_NAMESPACE DuckDBGeography)
 FetchContent_Declare(
   nanoarrow
-  URL https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.6.0.zip
+  URL https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.7.0.zip
   URL_HASH
     SHA256=73b3235453902c9e92b5e942683d02d764a2aea1f999c03bf4a747c90df2f505)
 
 set(GEOARROW_NAMESPACE DuckDBGeography)
 FetchContent_Declare(
   geoarrow
-  URL https://github.com/geoarrow/geoarrow-c/archive/4a755ea6a09b8e842a9ccaef6ef05e6e3870f973.zip
+  URL https://github.com/geoarrow/geoarrow-c/archive/e4ba826fd8e4012bf67b27c2cb64313a78627ed8.zip
   URL_HASH
     SHA256=7d9caab1b55cc116b52b4eae34f392bc323a6f2e8afdd9c2a586957b99020f90)
 
