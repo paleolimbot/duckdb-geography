@@ -20,7 +20,7 @@ FetchContent_Declare(
   nanoarrow
   URL https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.7.0.zip
   URL_HASH
-    SHA256=73b3235453902c9e92b5e942683d02d764a2aea1f999c03bf4a747c90df2f505)
+    SHA256=bd40a2ee849c650b243818b12e925cac17f8fc300acacd141177345fd6b2e9f4)
 
 set(GEOARROW_NAMESPACE DuckDBGeography)
 FetchContent_Declare(
