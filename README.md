@@ -141,7 +141,7 @@ been ported to the underlying C++ library and just aren't wired up to DuckDB yet
 To build the extension, clone the repository with submodules:
 
 ``` shell
-git clone --recurse-submodules https://github.com/paleolimbot/duckdb-nanoarrow.git
+git clone --recurse-submodules https://github.com/paleolimbot/duckdb-geography.git
 ```
 
 ...or if you forget to clone the submodules/you're using VSCode to do your checkout, you can run:
@@ -162,12 +162,12 @@ The main binaries that will be built are:
 ```sh
 ./build/release/duckdb
 ./build/release/test/unittest
-./build/release/extension/nanoarrow/nanoarrow.duckdb_extension
+./build/release/extension/geography/geography.duckdb_extension
 ```
 
 - `duckdb` is the binary for the duckdb shell with the extension code automatically loaded.
 - `unittest` is the test runner of duckdb. Again, the extension is already linked into the binary.
-- `nanoarrow.duckdb_extension` is the loadable binary as it would be distributed.
+- `geography.duckdb_extension` is the loadable binary as it would be distributed.
 
 If you'd like to use VSCode with the integration provided by the CMake/clangd extension, you
 can run:
