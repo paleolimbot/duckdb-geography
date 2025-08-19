@@ -20,9 +20,7 @@ def _install_dev_and_connect():
     if possible_builds:
         con.install_extension(possible_builds[0], force_install=True)
     else:
-        warnings.warn(
-            "Can't find build directory for geography.duckdb_extension; skipping INSTALL"
-        )
+        warnings.warn("Can't find build directory for geography.duckdb_extension; skipping INSTALL")
 
     con.load_extension("geography")
     return con

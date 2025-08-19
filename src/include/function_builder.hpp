@@ -64,7 +64,7 @@ class ScalarFunctionBuilder {
   vector<string> parameter_names;
   string description;
   string example;
-  unordered_map<string, string> tags = {};
+  InsertionOrderPreservingMap<string> tags = {};
 };
 
 inline void ScalarFunctionBuilder::SetDescription(const string& desc) {

@@ -1,4 +1,4 @@
-# name: test/sql/geography.test
+# name: test/sql/geography/extension.test
 # description: test geography extension
 # group: [geography]
 

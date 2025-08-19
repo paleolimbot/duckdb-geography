@@ -1,4 +1,4 @@
-# name: test/sql/cell_ops.test
+# name: test/sql/geography/cell_ops.test
 # description: test geography extension cell operations
 # group: [geography]
 

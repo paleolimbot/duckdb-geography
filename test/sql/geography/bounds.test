@@ -1,4 +1,4 @@
-# name: test/sql/bounds.test
+# name: test/sql/geography/bounds.test
 # description: test geography extension cell operations
 # group: [geography]
 

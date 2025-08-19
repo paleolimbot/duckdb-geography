@@ -1,4 +1,4 @@
-# name: test/sql/predicates.test
+# name: test/sql/geography/binary_index_ops.test
 # description: test geography extension cell operations
 # group: [geography]
 
