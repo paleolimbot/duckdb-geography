@@ -37,4 +37,4 @@ jobs:
       duckdb_version: v1.3.2
       ci_tools_version: v1.3.2
       extension_name: geography
-      format_checks: 'format;tidy'
+      format_checks: 'format' # 'tidy' doesn't work with VCPKG right now...
