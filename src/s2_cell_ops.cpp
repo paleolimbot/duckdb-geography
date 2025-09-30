@@ -28,7 +28,7 @@ struct S2CellCenterFromGeography {
     GeographyDecoder decoder;
 
     UnaryExecutor::Execute<string_t, uint64_t>(
-        source, result, count, [&](string_t geog_str) -> uint64 {
+        source, result, count, [&](string_t geog_str) -> uint64_t {
           decoder.DecodeTag(geog_str);
 
           // Empties are always translated as invalid regardless of type
@@ -78,8 +78,8 @@ struct S2CellUnionFromS2Cell {
     ListVector::Reserve(result, count);
     uint64_t offset = 0;
 
-    UnaryExecutor::Execute<int64_t, list_entry_t>(
-        source, result, count, [&](int64_t cell_id) {
+    UnaryExecutor::Execute<uint64_t, list_entry_t>(
+        source, result, count, [&](uint64_t cell_id) {
           S2CellId cell(cell_id);
           if (!cell.is_valid()) {
             return list_entry_t{0, 0};
@@ -257,7 +257,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
   // Here the goal is to parse POINT (x x) or MULTIPOINT ((x x)) into a cell id
   // and error for anything else. EMPTY input goes to Sentinel().
   static inline void ExecutePoint(Vector& source, Vector& result, idx_t count) {
-    UnaryExecutor::Execute<string_t, uint64>(source, result, count, [&](string_t wkb) {
+    UnaryExecutor::Execute<string_t, uint64_t>(source, result, count, [&](string_t wkb) {
       Decoder decoder(wkb.GetData(), wkb.GetSize());
       S2CellId cell_id = S2CellId::Sentinel();
       VisitGeometry(
@@ -289,7 +289,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
   // Would be much improved if we could also reproject the first xy value we find
   // so that nobody has to parse WKB just to do a vague spatial sort.
   static inline void ExecuteArbitrary(Vector& source, Vector& result, idx_t count) {
-    UnaryExecutor::Execute<string_t, uint64>(source, result, count, [&](string_t wkb) {
+    UnaryExecutor::Execute<string_t, uint64_t>(source, result, count, [&](string_t wkb) {
       Decoder decoder(wkb.GetData(), wkb.GetSize());
       S2CellId cell_id = S2CellId::Sentinel();
       VisitGeometry(
@@ -498,15 +498,15 @@ LIMIT 5;
 
   static inline void Execute(Vector& src_lon, Vector& src_lat, Vector& result,
                              idx_t count) {
-    BinaryExecutor::Execute<double, double, int64_t>(
+    BinaryExecutor::Execute<double, double, uint64_t>(
         src_lon, src_lat, result, count, [&](double lon, double lat) {
           if (std::isnan(lon) && std::isnan(lat)) {
-            return static_cast<uint64>(S2CellId::Sentinel().id());
+            return static_cast<uint64_t>(S2CellId::Sentinel().id());
           }
 
           auto latlng = S2LatLng::FromDegrees(lat, lon);
           S2CellId cell_id(latlng.ToPoint());
-          return static_cast<uint64>(cell_id.id());
+          return static_cast<uint64_t>(cell_id.id());
         });
   }
 };
