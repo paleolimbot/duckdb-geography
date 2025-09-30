@@ -28,7 +28,7 @@ struct S2CellCenterFromGeography {
     GeographyDecoder decoder;
 
     UnaryExecutor::Execute<string_t, uint64_t>(
-        source, result, count, [&](string_t geog_str) {
+        source, result, count, [&](string_t geog_str) -> uint64 {
           decoder.DecodeTag(geog_str);
 
           // Empties are always translated as invalid regardless of type
