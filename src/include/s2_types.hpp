@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {
 
@@ -15,7 +15,7 @@ struct Types {
   static LogicalType S2_BOX();
 };
 
-void RegisterTypes(DatabaseInstance& instance);
+void RegisterTypes(ExtensionLoader& loader);
 
 }  // namespace duckdb_s2
 }  // namespace duckdb

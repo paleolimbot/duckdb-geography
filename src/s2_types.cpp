@@ -1,9 +1,7 @@
-
 #include "s2_types.hpp"
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
@@ -41,12 +39,12 @@ LogicalType Types::S2_BOX() {
   return type;
 }
 
-void RegisterTypes(DatabaseInstance& instance) {
-  ExtensionUtil::RegisterType(instance, "S2_CELL", Types::S2_CELL());
-  ExtensionUtil::RegisterType(instance, "S2_CELL_UNION", Types::S2_CELL_UNION());
-  ExtensionUtil::RegisterType(instance, "S2_CELL_CENTER", Types::S2_CELL_CENTER());
-  ExtensionUtil::RegisterType(instance, "GEOGRAPHY", Types::GEOGRAPHY());
-  ExtensionUtil::RegisterType(instance, "S2_BOX", Types::S2_BOX());
+void RegisterTypes(ExtensionLoader& loader) {
+  loader.RegisterType("S2_CELL", Types::S2_CELL());
+  loader.RegisterType("S2_CELL_UNION", Types::S2_CELL_UNION());
+  loader.RegisterType("S2_CELL_CENTER", Types::S2_CELL_CENTER());
+  loader.RegisterType("GEOGRAPHY", Types::GEOGRAPHY());
+  loader.RegisterType("S2_BOX", Types::S2_BOX());
 }
 
 }  // namespace duckdb_s2

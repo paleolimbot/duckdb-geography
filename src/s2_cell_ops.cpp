@@ -1,6 +1,5 @@
 
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include "s2/s2cell.h"
 #include "s2/s2cell_union.h"
@@ -173,9 +172,9 @@ struct S2CellUnionToGeography {
 // with a single point). Also, includes an implementation of the s2ified
 // GEOSHilbertCode_r() (which helpfully does not require a previously calculated extent).
 struct S2CellCenterFromWKB {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cellfromwkb", [](ScalarFunctionBuilder& func) {
+        loader, "s2_cellfromwkb", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("wkb", LogicalType::BLOB);
             variant.SetReturnType(Types::S2_CELL_CENTER());
@@ -206,7 +205,7 @@ LIMIT 5;
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_arbitrarycellfromwkb", [](ScalarFunctionBuilder& func) {
+        loader, "s2_arbitrarycellfromwkb", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("wkb", LogicalType::BLOB);
             variant.SetReturnType(Types::S2_CELL_CENTER());
@@ -462,9 +461,9 @@ SELECT * FROM glob('cities/**') LIMIT 5;
 };
 
 struct S2CellCenterFromLonLat {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cellfromlonlat", [](ScalarFunctionBuilder& func) {
+        loader, "s2_cellfromlonlat", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("lon", LogicalType::DOUBLE);
             variant.AddParameter("lat", LogicalType::DOUBLE);
@@ -577,9 +576,9 @@ struct S2CellToGeography {
 };
 
 struct S2CellVertex {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_vertex", [](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_vertex", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell_id", Types::S2_CELL());
             variant.AddParameter("vertex_id", LogicalType::INTEGER);
@@ -650,9 +649,9 @@ struct S2CellToString {
 };
 
 struct S2CellToToken {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_token", [](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_token", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell", Types::S2_CELL());
             variant.SetReturnType(LogicalType::VARCHAR);
@@ -700,9 +699,9 @@ struct S2CellFromString {
 };
 
 struct S2CellFromToken {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_from_token", [](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_from_token", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("text", LogicalType::VARCHAR);
             variant.SetReturnType(Types::S2_CELL());
@@ -731,9 +730,9 @@ SELECT s2_cell_from_token('foofy');
 };
 
 struct S2CellLevel {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_level", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_level", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell", Types::S2_CELL());
             variant.SetReturnType(LogicalType::TINYINT);
@@ -771,9 +770,9 @@ struct S2BinaryCellPredicate {
 };
 
 struct S2CellIntersects {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_intersects", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_intersects", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell1", Types::S2_CELL());
             variant.AddParameter("cell2", Types::S2_CELL());
@@ -804,9 +803,9 @@ SELECT s2_cell_intersects('5/30'::S2_CELL, '5/3'::S2_CELL) AS result;
 };
 
 struct S2CellContains {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_contains", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_contains", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell1", Types::S2_CELL());
             variant.AddParameter("cell2", Types::S2_CELL());
@@ -845,9 +844,9 @@ struct S2CellToCell {
 };
 
 struct S2CellChild {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_child", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_child", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell", Types::S2_CELL());
             variant.AddParameter("index", LogicalType::INTEGER);
@@ -874,9 +873,9 @@ FROM (VALUES (0), (1), (2), (3), (4)) indices(ind);
 };
 
 struct S2CellParent {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_parent", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_parent", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell", Types::S2_CELL());
             variant.AddParameter("level", LogicalType::INTEGER);
@@ -902,9 +901,9 @@ FROM (VALUES (0), (1), (2), (3), (4), (5), (-1), (-2)) levels(level);
 };
 
 struct S2CellEdgeNeighbor {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_edge_neighbor", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_edge_neighbor", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell", Types::S2_CELL());
             variant.AddParameter("index", LogicalType::INTEGER);
@@ -932,9 +931,9 @@ FROM (VALUES (0), (1), (2), (3), (4)) indices(ind);
 };
 
 struct S2CellBounds {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_range_min", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_range_min", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell", Types::S2_CELL());
             variant.SetReturnType(Types::S2_CELL());
@@ -955,7 +954,7 @@ SELECT
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_cell_range_max", [&](ScalarFunctionBuilder& func) {
+        loader, "s2_cell_range_max", [&](ScalarFunctionBuilder& func) {
           func.AddVariant([&](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("cell", Types::S2_CELL());
             variant.SetReturnType(Types::S2_CELL());
@@ -1011,83 +1010,78 @@ bool ExecuteNoopCast(Vector& source, Vector& result, idx_t count,
 
 }  // namespace
 
-void RegisterS2CellOps(DatabaseInstance& instance) {
+void RegisterS2CellOps(ExtensionLoader& loader) {
   using namespace s2geography::op::cell;
 
   // Explicit casts to/from string handle the debug string (better for printing)
   // We use the same character representation for both cells and centers.
-  ExtensionUtil::RegisterCastFunction(
-      instance, Types::S2_CELL(), LogicalType::VARCHAR,
-      BoundCastInfo(S2CellToString<ToDebugString>::ExecuteCast), 1);
-  ExtensionUtil::RegisterCastFunction(
-      instance, LogicalType::VARCHAR, Types::S2_CELL(),
+  loader.RegisterCastFunction(Types::S2_CELL(), LogicalType::VARCHAR,
+                              BoundCastInfo(S2CellToString<ToDebugString>::ExecuteCast),
+                              1);
+  loader.RegisterCastFunction(
+      LogicalType::VARCHAR, Types::S2_CELL(),
       BoundCastInfo(S2CellFromString<FromDebugString>::ExecuteCast), 1);
-  ExtensionUtil::RegisterCastFunction(
-      instance, Types::S2_CELL_CENTER(), LogicalType::VARCHAR,
-      BoundCastInfo(S2CellToString<ToDebugString>::ExecuteCast), 1);
-  ExtensionUtil::RegisterCastFunction(
-      instance, LogicalType::VARCHAR, Types::S2_CELL_CENTER(),
+  loader.RegisterCastFunction(Types::S2_CELL_CENTER(), LogicalType::VARCHAR,
+                              BoundCastInfo(S2CellToString<ToDebugString>::ExecuteCast),
+                              1);
+  loader.RegisterCastFunction(
+      LogicalType::VARCHAR, Types::S2_CELL_CENTER(),
       BoundCastInfo(S2CellFromString<FromDebugString>::ExecuteCast), 1);
 
   // s2_cell_center to geography can be implicit (never fails for valid input)
-  ExtensionUtil::RegisterCastFunction(
-      instance, Types::S2_CELL_CENTER(), Types::GEOGRAPHY(),
-      BoundCastInfo(S2CellCenterToGeography::ExecuteCast), 0);
+  loader.RegisterCastFunction(Types::S2_CELL_CENTER(), Types::GEOGRAPHY(),
+                              BoundCastInfo(S2CellCenterToGeography::ExecuteCast), 0);
 
   // geography to s2_cell_center must be explicit (can move a point up to 1 cm,
   // fails for input that is not a single point)
-  ExtensionUtil::RegisterCastFunction(
-      instance, Types::GEOGRAPHY(), Types::S2_CELL_CENTER(),
-      BoundCastInfo(S2CellCenterFromGeography::ExecuteCast), 1);
+  loader.RegisterCastFunction(Types::GEOGRAPHY(), Types::S2_CELL_CENTER(),
+                              BoundCastInfo(S2CellCenterFromGeography::ExecuteCast), 1);
 
   // s2_cell to geography can be implicit (never fails for valid input)
-  ExtensionUtil::RegisterCastFunction(instance, Types::S2_CELL(), Types::GEOGRAPHY(),
-                                      BoundCastInfo(S2CellToGeography::ExecuteCast), 0);
+  loader.RegisterCastFunction(Types::S2_CELL(), Types::GEOGRAPHY(),
+                              BoundCastInfo(S2CellToGeography::ExecuteCast), 0);
 
   // s2_cell_union to geography can be implicit
-  ExtensionUtil::RegisterCastFunction(
-      instance, Types::S2_CELL_UNION(), Types::GEOGRAPHY(),
-      BoundCastInfo(S2CellUnionToGeography::ExecuteCast), 0);
+  loader.RegisterCastFunction(Types::S2_CELL_UNION(), Types::GEOGRAPHY(),
+                              BoundCastInfo(S2CellUnionToGeography::ExecuteCast), 0);
 
   // s2_cell to s2_cell_union can be implicit
-  ExtensionUtil::RegisterCastFunction(instance, Types::S2_CELL(), Types::S2_CELL_UNION(),
-                                      BoundCastInfo(S2CellUnionFromS2Cell::ExecuteCast),
-                                      0);
+  loader.RegisterCastFunction(Types::S2_CELL(), Types::S2_CELL_UNION(),
+                              BoundCastInfo(S2CellUnionFromS2Cell::ExecuteCast), 0);
 
   // s2_cell union from storage is explicit
-  ExtensionUtil::RegisterCastFunction(
-      instance, LogicalType::LIST(Types::S2_CELL()), Types::S2_CELL_UNION(),
-      BoundCastInfo(S2CellUnionFromStorage::ExecuteCast), 1);
-  ExtensionUtil::RegisterCastFunction(
-      instance, LogicalType::LIST(LogicalType::UBIGINT), Types::S2_CELL_UNION(),
-      BoundCastInfo(S2CellUnionFromStorage::ExecuteCast), 1);
-  ExtensionUtil::RegisterCastFunction(
-      instance, LogicalType::LIST(LogicalType::BIGINT), Types::S2_CELL_UNION(),
-      BoundCastInfo(S2CellUnionFromStorage::ExecuteCast), 1);
+  loader.RegisterCastFunction(LogicalType::LIST(Types::S2_CELL()), Types::S2_CELL_UNION(),
+                              BoundCastInfo(S2CellUnionFromStorage::ExecuteCast), 1);
+  loader.RegisterCastFunction(LogicalType::LIST(LogicalType::UBIGINT),
+                              Types::S2_CELL_UNION(),
+                              BoundCastInfo(S2CellUnionFromStorage::ExecuteCast), 1);
+  loader.RegisterCastFunction(LogicalType::LIST(LogicalType::BIGINT),
+                              Types::S2_CELL_UNION(),
+                              BoundCastInfo(S2CellUnionFromStorage::ExecuteCast), 1);
 
   // Explicit casts: s2_cell to/from s2_cell_center
-  ExtensionUtil::RegisterCastFunction(instance, Types::S2_CELL_CENTER(), Types::S2_CELL(),
-                                      BoundCastInfo(ExecuteNoopCast), 1);
-  ExtensionUtil::RegisterCastFunction(instance, Types::S2_CELL(), Types::S2_CELL_CENTER(),
-                                      BoundCastInfo(ExecuteNoopCast), 1);
+  loader.RegisterCastFunction(Types::S2_CELL_CENTER(), Types::S2_CELL(),
+                              BoundCastInfo(ExecuteNoopCast), 1);
+  loader.RegisterCastFunction(Types::S2_CELL(), Types::S2_CELL_CENTER(),
+                              BoundCastInfo(ExecuteNoopCast), 1);
 
-  S2CellCenterFromWKB::Register(instance);
-  S2CellCenterFromLonLat::Register(instance);
-  S2CellToToken::Register(instance);
-  S2CellFromToken::Register(instance);
+  S2CellCenterFromWKB::Register(loader);
+  S2CellCenterFromLonLat::Register(loader);
+  S2CellToToken::Register(loader);
+  S2CellFromToken::Register(loader);
 
-  S2CellLevel::Register(instance);
+  S2CellLevel::Register(loader);
 
-  S2CellVertex::Register(instance);
+  S2CellVertex::Register(loader);
 
-  S2CellContains::Register(instance);
-  S2CellIntersects::Register(instance);
+  S2CellContains::Register(loader);
+  S2CellIntersects::Register(loader);
 
-  S2CellChild::Register(instance);
-  S2CellParent::Register(instance);
-  S2CellEdgeNeighbor::Register(instance);
+  S2CellChild::Register(loader);
+  S2CellParent::Register(loader);
+  S2CellEdgeNeighbor::Register(loader);
 
-  S2CellBounds::Register(instance);
+  S2CellBounds::Register(loader);
 }
 
 }  // namespace duckdb_s2

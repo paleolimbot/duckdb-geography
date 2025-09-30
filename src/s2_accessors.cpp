@@ -1,6 +1,5 @@
 
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include "function_builder.hpp"
 
@@ -18,9 +17,9 @@ namespace duckdb_s2 {
 namespace {
 
 struct S2IsEmpty {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_isempty", [](ScalarFunctionBuilder& func) {
+        loader, "s2_isempty", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(LogicalType::BOOLEAN);
@@ -50,9 +49,9 @@ struct S2IsEmpty {
 };
 
 struct S2IsValid {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_is_valid", [](ScalarFunctionBuilder& func) {
+        loader, "s2_is_valid", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(LogicalType::BOOLEAN);
@@ -99,9 +98,9 @@ SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)')) AS 
 };
 
 struct S2IsValidReason {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_is_valid_reason", [](ScalarFunctionBuilder& func) {
+        loader, "s2_is_valid_reason", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(LogicalType::VARCHAR);
@@ -151,8 +150,8 @@ SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)
 };
 
 struct S2Area {
-  static void Register(DatabaseInstance& instance) {
-    FunctionBuilder::RegisterScalar(instance, "s2_area", [](ScalarFunctionBuilder& func) {
+  static void Register(ExtensionLoader& loader) {
+    FunctionBuilder::RegisterScalar(loader, "s2_area", [](ScalarFunctionBuilder& func) {
       func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
         variant.AddParameter("geog", Types::GEOGRAPHY());
         variant.SetReturnType(LogicalType::DOUBLE);
@@ -209,9 +208,9 @@ SELECT s2_area('POINT (0 0)'::GEOGRAPHY) AS area;
 };
 
 struct S2Perimieter {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_perimeter", [](ScalarFunctionBuilder& func) {
+        loader, "s2_perimeter", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(LogicalType::DOUBLE);
@@ -268,21 +267,20 @@ SELECT s2_perimeter('POINT (0 0)'::GEOGRAPHY) AS perimeter;
 };
 
 struct S2Length {
-  static void Register(DatabaseInstance& instance) {
-    FunctionBuilder::RegisterScalar(
-        instance, "s2_length", [](ScalarFunctionBuilder& func) {
-          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
-            variant.AddParameter("geog", Types::GEOGRAPHY());
-            variant.SetReturnType(LogicalType::DOUBLE);
-            variant.SetFunction(ExecuteFn);
-          });
+  static void Register(ExtensionLoader& loader) {
+    FunctionBuilder::RegisterScalar(loader, "s2_length", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog", Types::GEOGRAPHY());
+        variant.SetReturnType(LogicalType::DOUBLE);
+        variant.SetFunction(ExecuteFn);
+      });
 
-          func.SetDescription(R"(
+      func.SetDescription(R"(
 Calculate the length of the geography in meters.
 
 For non-linestring or multilinestring geographies, `s2_length()` returns `0.0`.
 )");
-          func.SetExample(R"(
+      func.SetExample(R"(
 SELECT s2_length('POINT (0 0)'::GEOGRAPHY) AS length;
 ----
 SELECT s2_length('LINESTRING (0 0, -64 45)'::GEOGRAPHY) AS length;
@@ -290,9 +288,9 @@ SELECT s2_length('LINESTRING (0 0, -64 45)'::GEOGRAPHY) AS length;
 SELECT s2_length(s2_data_country('Canada')) AS length;
 )");
 
-          func.SetTag("ext", "geography");
-          func.SetTag("category", "accessors");
-        });
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "accessors");
+    });
   }
 
   static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
@@ -325,8 +323,8 @@ SELECT s2_length(s2_data_country('Canada')) AS length;
 };
 
 struct S2XY {
-  static void Register(DatabaseInstance& instance) {
-    FunctionBuilder::RegisterScalar(instance, "s2_x", [](ScalarFunctionBuilder& func) {
+  static void Register(ExtensionLoader& loader) {
+    FunctionBuilder::RegisterScalar(loader, "s2_x", [](ScalarFunctionBuilder& func) {
       func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
         variant.AddParameter("geog", Types::GEOGRAPHY());
         variant.SetReturnType(LogicalType::DOUBLE);
@@ -347,7 +345,7 @@ SELECT s2_x('POINT (-64 45)'::GEOGRAPHY);
       func.SetTag("category", "accessors");
     });
 
-    FunctionBuilder::RegisterScalar(instance, "s2_y", [](ScalarFunctionBuilder& func) {
+    FunctionBuilder::RegisterScalar(loader, "s2_y", [](ScalarFunctionBuilder& func) {
       func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
         variant.AddParameter("geog", Types::GEOGRAPHY());
         variant.SetReturnType(LogicalType::DOUBLE);
@@ -411,9 +409,9 @@ SELECT s2_y('POINT (-64 45)'::GEOGRAPHY);
 };
 
 struct S2Dimension {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_dimension", [](ScalarFunctionBuilder& func) {
+        loader, "s2_dimension", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(LogicalType::INTEGER);
@@ -474,9 +472,9 @@ SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::G
 };
 
 struct S2NumPoints {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_num_points", [](ScalarFunctionBuilder& func) {
+        loader, "s2_num_points", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(LogicalType::INTEGER);
@@ -526,16 +524,16 @@ SELECT s2_num_points(s2_data_country('Canada'));
 
 }  // namespace
 
-void RegisterS2GeographyAccessors(DatabaseInstance& instance) {
-  S2IsEmpty::Register(instance);
-  S2IsValid::Register(instance);
-  S2IsValidReason::Register(instance);
-  S2Area::Register(instance);
-  S2Perimieter::Register(instance);
-  S2Length::Register(instance);
-  S2XY::Register(instance);
-  S2Dimension::Register(instance);
-  S2NumPoints::Register(instance);
+void RegisterS2GeographyAccessors(ExtensionLoader& loader) {
+  S2IsEmpty::Register(loader);
+  S2IsValid::Register(loader);
+  S2IsValidReason::Register(loader);
+  S2Area::Register(loader);
+  S2Perimieter::Register(loader);
+  S2Length::Register(loader);
+  S2XY::Register(loader);
+  S2Dimension::Register(loader);
+  S2NumPoints::Register(loader);
 }
 
 }  // namespace duckdb_s2

@@ -113,20 +113,21 @@ void ScalarFunctionBuilder::AddVariant(CALLBACK&& callback) {
 class FunctionBuilder {
  public:
   template <class CALLBACK>
-  static void RegisterScalar(DatabaseInstance& db, const char* name, CALLBACK&& callback);
+  static void RegisterScalar(ExtensionLoader& loader, const char* name,
+                             CALLBACK&& callback);
 
  private:
-  static void Register(DatabaseInstance& db, const char* name,
+  static void Register(ExtensionLoader& loader, const char* name,
                        ScalarFunctionBuilder& builder);
 };
 
 template <class CALLBACK>
-void FunctionBuilder::RegisterScalar(DatabaseInstance& db, const char* name,
+void FunctionBuilder::RegisterScalar(ExtensionLoader& loader, const char* name,
                                      CALLBACK&& callback) {
   ScalarFunctionBuilder builder(name);
   callback(builder);
 
-  Register(db, name, builder);
+  Register(loader, name, builder);
 }
 
 }  // namespace duckdb

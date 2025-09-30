@@ -2,7 +2,6 @@
 
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include "s2/s2cell_union.h"
 #include "s2/s2region_coverer.h"
@@ -18,9 +17,9 @@ namespace duckdb_s2 {
 namespace {
 
 struct S2Covering {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_covering", [](ScalarFunctionBuilder& func) {
+        loader, "s2_covering", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(Types::S2_CELL_UNION());
@@ -56,7 +55,7 @@ s2_cell_contains(cell, s2_data_city('Berlin')::S2_CELL_CENTER::S2_CELL);
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_covering_fixed_level", [](ScalarFunctionBuilder& func) {
+        loader, "s2_covering_fixed_level", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.AddParameter("fixed_level", LogicalType::INTEGER);
@@ -146,9 +145,9 @@ SELECT s2_covering_fixed_level(s2_data_country('Germany'), 4) AS covering;
 };
 
 struct S2BoundsRect {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_bounds_box", [](ScalarFunctionBuilder& func) {
+        loader, "s2_bounds_box", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(Types::S2_BOX());
@@ -280,20 +279,20 @@ struct S2BoundsRectAgg {
   static bool IgnoreNull() { return true; }
 };
 
-void RegisterAgg(DatabaseInstance& instance) {
+void RegisterAgg(ExtensionLoader& loader) {
   auto function = AggregateFunction::UnaryAggregate<BoundsAggState, string_t, string_t,
                                                     S2BoundsRectAgg>(Types::GEOGRAPHY(),
                                                                      Types::S2_BOX());
 
   // Register the function
   function.name = "s2_bounds_box_agg";
-  ExtensionUtil::RegisterFunction(instance, function);
+  loader.RegisterFunction(function);
 }
 
 struct S2BoxLngLatAsWkb {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_box_wkb", [](ScalarFunctionBuilder& func) {
+        loader, "s2_box_wkb", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("box", Types::S2_BOX());
             variant.SetReturnType(LogicalType::BLOB);
@@ -395,9 +394,9 @@ SELECT s2_box_wkb(s2_bounds_box('POINT (0 1)'::GEOGRAPHY)) as rect;
 };
 
 struct S2BoxStruct {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_box_struct", [](ScalarFunctionBuilder& func) {
+        loader, "s2_box_struct", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("box", Types::S2_BOX());
             variant.SetReturnType(LogicalType::STRUCT({{"xmin", LogicalType::DOUBLE},
@@ -434,8 +433,8 @@ SELECT s2_box_struct(s2_bounds_box('POINT (0 1)'::GEOGRAPHY)) as rect;
 };
 
 struct S2Box {
-  static void Register(DatabaseInstance& instance) {
-    FunctionBuilder::RegisterScalar(instance, "s2_box", [](ScalarFunctionBuilder& func) {
+  static void Register(ExtensionLoader& loader) {
+    FunctionBuilder::RegisterScalar(loader, "s2_box", [](ScalarFunctionBuilder& func) {
       func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
         variant.AddParameter("west", LogicalType::DOUBLE);
         variant.AddParameter("south", LogicalType::DOUBLE);
@@ -495,9 +494,9 @@ SELECT s2_box(177.285, -18.288, 177.285, -16.0209) as box;
 };
 
 struct S2BoxIntersects {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_box_intersects", [](ScalarFunctionBuilder& func) {
+        loader, "s2_box_intersects", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("box1", Types::S2_BOX());
             variant.AddParameter("box2", Types::S2_BOX());
@@ -545,9 +544,9 @@ SELECT s2_box_intersects(
 };
 
 struct S2BoxUnion {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_box_union", [](ScalarFunctionBuilder& func) {
+        loader, "s2_box_union", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("box1", Types::S2_BOX());
             variant.AddParameter("box2", Types::S2_BOX());
@@ -592,16 +591,16 @@ SELECT s2_box_union(
 
 }  // namespace
 
-void RegisterS2GeographyBounds(DatabaseInstance& instance) {
-  S2Covering::Register(instance);
-  S2BoundsRect::Register(instance);
-  S2BoxLngLatAsWkb::Register(instance);
-  S2BoxStruct::Register(instance);
-  S2Box::Register(instance);
-  S2BoxIntersects::Register(instance);
-  S2BoxUnion::Register(instance);
+void RegisterS2GeographyBounds(ExtensionLoader& loader) {
+  S2Covering::Register(loader);
+  S2BoundsRect::Register(loader);
+  S2BoxLngLatAsWkb::Register(loader);
+  S2BoxStruct::Register(loader);
+  S2Box::Register(loader);
+  S2BoxIntersects::Register(loader);
+  S2BoxUnion::Register(loader);
 
-  RegisterAgg(instance);
+  RegisterAgg(loader);
 }
 
 }  // namespace duckdb_s2

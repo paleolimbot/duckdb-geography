@@ -6,7 +6,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include "s2_cell_ops.hpp"
 #include "s2_data.hpp"
@@ -21,19 +20,20 @@ inline void S2ScalarFun(DataChunk& args, ExpressionState& state, Vector& result)
   result.SetValue(0, "s2");
 }
 
-static void LoadInternal(DatabaseInstance& instance) {
+static void LoadInternal(ExtensionLoader& loader) {
   // Register a scalar function
   auto s2_scalar_function = ScalarFunction("s2", {}, LogicalType::VARCHAR, S2ScalarFun);
-  ExtensionUtil::RegisterFunction(instance, s2_scalar_function);
 
-  duckdb_s2::RegisterTypes(instance);
-  duckdb_s2::RegisterS2Dependencies(instance);
-  duckdb_s2::RegisterS2CellOps(instance);
-  duckdb_s2::RegisterS2GeographyOps(instance);
-  duckdb_s2::RegisterS2Data(instance);
+  loader.RegisterFunction(s2_scalar_function);
+
+  duckdb_s2::RegisterTypes(loader);
+  duckdb_s2::RegisterS2Dependencies(loader);
+  duckdb_s2::RegisterS2CellOps(loader);
+  duckdb_s2::RegisterS2GeographyOps(loader);
+  duckdb_s2::RegisterS2Data(loader);
 }
 
-void GeographyExtension::Load(DuckDB& db) { LoadInternal(*db.instance); }
+void GeographyExtension::Load(ExtensionLoader& loader) { LoadInternal(loader); }
 std::string GeographyExtension::Name() { return "geography"; }
 
 std::string GeographyExtension::Version() const {
@@ -48,14 +48,7 @@ std::string GeographyExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void geography_init(duckdb::DatabaseInstance& db) {
-  duckdb::DuckDB db_wrapper(db);
-  db_wrapper.LoadExtension<duckdb::GeographyExtension>();
-}
-
-DUCKDB_EXTENSION_API const char* geography_version() {
-  return duckdb::DuckDB::LibraryVersion();
-}
+DUCKDB_CPP_EXTENSION_ENTRY(geography, loader) { duckdb::LoadInternal(loader); }
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN
