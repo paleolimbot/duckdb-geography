@@ -27,13 +27,13 @@ struct S2CellCenterFromGeography {
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
     GeographyDecoder decoder;
 
-    UnaryExecutor::Execute<string_t, int64_t>(
+    UnaryExecutor::Execute<string_t, uint64_t>(
         source, result, count, [&](string_t geog_str) {
           decoder.DecodeTag(geog_str);
 
           // Empties are always translated as invalid regardless of type
           if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return static_cast<int64_t>(S2CellId::Sentinel().id());
+            return S2CellId::Sentinel().id();
           }
 
           // If we already have a snapped cell center encoding, the last 8 inlined
@@ -41,7 +41,7 @@ struct S2CellCenterFromGeography {
           if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER &&
               decoder.tag.covering_size == 1) {
             uint64_t cell_id = LittleEndian::Load64(geog_str.GetData() + 4);
-            return static_cast<int64_t>(cell_id);
+            return cell_id;
           }
 
           // Otherwise, we just need to load the geography
@@ -51,7 +51,7 @@ struct S2CellCenterFromGeography {
           // and EncodedShapeIndex geography. A single shape with a single
           // edge always works here.
           if (geog->num_shapes() != 1) {
-            return static_cast<int64_t>(S2CellId::Sentinel().id());
+            return S2CellId::Sentinel().id();
           }
 
           std::unique_ptr<S2Shape> shape = geog->Shape(0);
@@ -62,7 +62,7 @@ struct S2CellCenterFromGeography {
           }
 
           S2CellId cell(shape->edge(0).v0);
-          return static_cast<int64_t>(cell.id());
+          return cell.id();
         });
   }
 };
@@ -257,7 +257,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
   // Here the goal is to parse POINT (x x) or MULTIPOINT ((x x)) into a cell id
   // and error for anything else. EMPTY input goes to Sentinel().
   static inline void ExecutePoint(Vector& source, Vector& result, idx_t count) {
-    UnaryExecutor::Execute<string_t, int64_t>(source, result, count, [&](string_t wkb) {
+    UnaryExecutor::Execute<string_t, uint64>(source, result, count, [&](string_t wkb) {
       Decoder decoder(wkb.GetData(), wkb.GetSize());
       S2CellId cell_id = S2CellId::Sentinel();
       VisitGeometry(
@@ -280,7 +280,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
           },
           [](void) { throw InvalidInputException("Invalid WKB"); });
 
-      return static_cast<int64_t>(cell_id.id());
+      return cell_id.id();
     });
   }
 
@@ -289,7 +289,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
   // Would be much improved if we could also reproject the first xy value we find
   // so that nobody has to parse WKB just to do a vague spatial sort.
   static inline void ExecuteArbitrary(Vector& source, Vector& result, idx_t count) {
-    UnaryExecutor::Execute<string_t, int64_t>(source, result, count, [&](string_t wkb) {
+    UnaryExecutor::Execute<string_t, uint64>(source, result, count, [&](string_t wkb) {
       Decoder decoder(wkb.GetData(), wkb.GetSize());
       S2CellId cell_id = S2CellId::Sentinel();
       VisitGeometry(
@@ -303,7 +303,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
           // We don't care about invalid input here
           [](void) {});
 
-      return static_cast<int64_t>(cell_id.id());
+      return cell_id.id();
     });
   }
 
@@ -501,12 +501,12 @@ LIMIT 5;
     BinaryExecutor::Execute<double, double, int64_t>(
         src_lon, src_lat, result, count, [&](double lon, double lat) {
           if (std::isnan(lon) && std::isnan(lat)) {
-            return static_cast<int64_t>(S2CellId::Sentinel().id());
+            return static_cast<uint64>(S2CellId::Sentinel().id());
           }
 
           auto latlng = S2LatLng::FromDegrees(lat, lon);
           S2CellId cell_id(latlng.ToPoint());
-          return static_cast<int64_t>(cell_id.id());
+          return static_cast<uint64>(cell_id.id());
         });
   }
 };
@@ -538,7 +538,7 @@ struct S2CellCenterToGeography {
     tag.Encode(&empty);
     string_t empty_str{empty.base(), static_cast<uint32_t>(empty.length())};
 
-    UnaryExecutor::Execute<int64_t, string_t>(source, result, count, [&](int64_t arg0) {
+    UnaryExecutor::Execute<uint64_t, string_t>(source, result, count, [&](uint64_t arg0) {
       S2CellId cell(arg0);
       if (cell.is_valid()) {
         std::memcpy(non_empty_cell_id, &arg0, sizeof(arg0));
@@ -560,7 +560,7 @@ struct S2CellToGeography {
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
     GeographyEncoder encoder;
 
-    UnaryExecutor::Execute<int64_t, string_t>(source, result, count, [&](int64_t arg0) {
+    UnaryExecutor::Execute<uint64_t, string_t>(source, result, count, [&](uint64_t arg0) {
       S2CellId cell(arg0);
       if (!cell.is_valid()) {
         s2geography::PolygonGeography geog;
@@ -616,9 +616,9 @@ SELECT '5/'::S2_CELL::GEOGRAPHY as geog;
     s2geography::op::cell::CellVertex op;
     GeographyEncoder encoder;
 
-    BinaryExecutor::Execute<int64_t, int32_t, string_t>(
+    BinaryExecutor::Execute<uint64_t, int32_t, string_t>(
         args.data[0], args.data[1], result, args.size(),
-        [&](int64_t cell_id, int32_t vertex_id) {
+        [&](uint64_t cell_id, int32_t vertex_id) {
           Point pt = op.ExecuteScalar(cell_id, static_cast<int8_t>(vertex_id));
           s2geography::PointGeography geog({pt[0], pt[1], pt[2]});
           return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
@@ -640,7 +640,7 @@ struct S2CellToString {
 
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
     Op op;
-    UnaryExecutor::Execute<int64_t, string_t>(source, result, count, [&](int64_t arg0) {
+    UnaryExecutor::Execute<uint64_t, string_t>(source, result, count, [&](uint64_t arg0) {
       std::string_view str = op.ExecuteScalar(arg0);
       return StringVector::AddString(
           result, string_t{str.data(), static_cast<uint32_t>(str.size())});
@@ -691,9 +691,9 @@ struct S2CellFromString {
 
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
     Op op;
-    UnaryExecutor::Execute<string_t, int64_t>(source, result, count, [&](string_t arg0) {
+    UnaryExecutor::Execute<string_t, uint64_t>(source, result, count, [&](string_t arg0) {
       std::string_view item_view{arg0.GetData(), static_cast<size_t>(arg0.GetSize())};
-      return static_cast<int64_t>(op.ExecuteScalar(item_view));
+      return static_cast<uint64_t>(op.ExecuteScalar(item_view));
     });
   }
 };
@@ -753,9 +753,9 @@ SELECT s2_cell_level('5/33120'::S2_CELL);
 
   static inline void Execute(DataChunk& args, ExpressionState& state, Vector& result) {
     s2geography::op::cell::Level op;
-    UnaryExecutor::Execute<int64_t, int8_t>(
+    UnaryExecutor::Execute<uint64_t, int8_t>(
         args.data[0], result, args.size(),
-        [&](int64_t arg0) { return op.ExecuteScalar(arg0); });
+        [&](uint64_t arg0) { return op.ExecuteScalar(arg0); });
   }
 };
 
@@ -763,9 +763,9 @@ template <typename Op>
 struct S2BinaryCellPredicate {
   static inline void Execute(DataChunk& args, ExpressionState& state, Vector& result) {
     Op op;
-    BinaryExecutor::Execute<int64_t, int64_t, bool>(
+    BinaryExecutor::Execute<uint64_t, uint64_t, bool>(
         args.data[0], args.data[1], result, args.size(),
-        [&](int64_t arg0, int64_t arg1) { return op.ExecuteScalar(arg0, arg1); });
+        [&](uint64_t arg0, uint64_t arg1) { return op.ExecuteScalar(arg0, arg1); });
   }
 };
 
@@ -836,9 +836,10 @@ template <typename Op>
 struct S2CellToCell {
   static inline void Execute(DataChunk& args, ExpressionState& state, Vector& result) {
     Op op;
-    BinaryExecutor::Execute<int64_t, int32_t, int64_t>(
-        args.data[0], args.data[1], result, args.size(), [&](int64_t arg0, int32_t arg1) {
-          return static_cast<int64_t>(op.ExecuteScalar(arg0, static_cast<int8_t>(arg1)));
+    BinaryExecutor::Execute<uint64_t, int32_t, uint64_t>(
+        args.data[0], args.data[1], result, args.size(),
+        [&](uint64_t arg0, int32_t arg1) {
+          return static_cast<uint64_t>(op.ExecuteScalar(arg0, static_cast<int8_t>(arg1)));
         });
   }
 };
@@ -977,28 +978,28 @@ SELECT
 
   static inline void ExecuteRangeMin(DataChunk& args, ExpressionState& state,
                                      Vector& result) {
-    UnaryExecutor::Execute<int64_t, int64_t>(
-        args.data[0], result, args.size(), [&](int64_t cell_id) {
-          S2CellId cell(cell_id);
-          if (!cell.is_valid()) {
-            return static_cast<int64_t>(S2CellId::Sentinel().id());
-          } else {
-            return static_cast<int64_t>(cell.range_min().id());
-          }
-        });
+    UnaryExecutor::Execute<uint64_t, uint64_t>(args.data[0], result, args.size(),
+                                               [&](uint64_t cell_id) {
+                                                 S2CellId cell(cell_id);
+                                                 if (!cell.is_valid()) {
+                                                   return S2CellId::Sentinel().id();
+                                                 } else {
+                                                   return cell.range_min().id();
+                                                 }
+                                               });
   }
 
   static inline void ExecuteRangeMax(DataChunk& args, ExpressionState& state,
                                      Vector& result) {
-    UnaryExecutor::Execute<int64_t, int64_t>(
-        args.data[0], result, args.size(), [&](int64_t cell_id) {
-          S2CellId cell(cell_id);
-          if (!cell.is_valid()) {
-            return static_cast<int64_t>(S2CellId::Sentinel().id());
-          } else {
-            return static_cast<int64_t>(cell.range_max().id());
-          }
-        });
+    UnaryExecutor::Execute<uint64_t, uint64_t>(args.data[0], result, args.size(),
+                                               [&](uint64_t cell_id) {
+                                                 S2CellId cell(cell_id);
+                                                 if (!cell.is_valid()) {
+                                                   return S2CellId::Sentinel().id();
+                                                 } else {
+                                                   return cell.range_max().id();
+                                                 }
+                                               });
   }
 };
 
