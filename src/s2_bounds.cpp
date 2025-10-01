@@ -201,93 +201,152 @@ SELECT s2_bounds_box(s2_data_country('Fiji')) as rect;
   }
 };
 
-// Needs to be trivially everythingable, so we can't just use S2LatLngRect
-struct BoundsAggState {
-  R1Interval lat;
-  S1Interval lng;
-
-  void Init() {
-    auto rect = S2LatLngRect::Empty();
-    lat = rect.lat();
-    lng = rect.lng();
-  }
-
-  void Union(const S2LatLngRect& other) {
-    auto rect = S2LatLngRect(lat, lng).Union(other);
-    lat = rect.lat();
-    lng = rect.lng();
-  }
-
-  void Union(const BoundsAggState& other) { Union(S2LatLngRect(other.lat, other.lng)); }
-};
-
 struct S2BoundsRectAgg {
-  template <class STATE>
-  static void Initialize(STATE& state) {
-    state.Init();
-  }
+  // Needs to be trivially everythingable, so we can't just use S2LatLngRect
+  struct State {
+    R1Interval lat;
+    S1Interval lng;
 
-  template <class STATE, class OP>
-  static void Combine(const STATE& source, STATE& target, AggregateInputData&) {
-    target.Union(source);
-  }
-
-  template <class INPUT_TYPE, class STATE, class OP>
-  static void Operation(STATE& state, const INPUT_TYPE& input, AggregateUnaryInput&) {
-    GeographyDecoder decoder;
-    decoder.DecodeTag(input);
-    if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-      return;
+    void Init() {
+      auto rect = S2LatLngRect::Empty();
+      lat = rect.lat();
+      lng = rect.lng();
     }
 
-    if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
-      uint64_t cell_id = LittleEndian::Load64(input.GetData() + 4);
-      S2CellId cell(cell_id);
-      S2LatLng pt = cell.ToLatLng();
-      S2LatLngRect rect(pt, pt);
-      state.Union(rect);
-    } else {
-      auto geog = decoder.Decode(input);
-      S2LatLngRect rect = geog->Region()->GetRectBound();
-      state.Union(rect);
+    void Union(const S2LatLngRect& other) {
+      auto rect = S2LatLngRect(lat, lng).Union(other);
+      lat = rect.lat();
+      lng = rect.lng();
+    }
+
+    void Union(const State& other) { Union(S2LatLngRect(other.lat, other.lng)); }
+
+    void Update(const string_t& input) {
+      GeographyDecoder decoder;
+      decoder.DecodeTag(input);
+      if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+        return;
+      }
+
+      if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+        uint64_t cell_id = LittleEndian::Load64(input.GetData() + 4);
+        S2CellId cell(cell_id);
+        S2LatLng pt = cell.ToLatLng();
+        S2LatLngRect rect(pt, pt);
+        Union(rect);
+      } else {
+        const auto geog = decoder.Decode(input);
+        S2LatLngRect rect = geog->Region()->GetRectBound();
+        Union(rect);
+      }
+    }
+  };
+
+  static idx_t StateSize(const AggregateFunction&) { return sizeof(State); }
+
+  static void Initialize(const AggregateFunction&, data_ptr_t state_mem) {
+    const auto state_ptr = new (state_mem) State();
+    state_ptr->Init();
+  }
+
+  static void Update(Vector inputs[], AggregateInputData&, idx_t, Vector& state_vec,
+                     idx_t count) {
+    auto& input_vec = inputs[0];
+
+    UnifiedVectorFormat input_format;
+    input_vec.ToUnifiedFormat(count, input_format);
+
+    UnifiedVectorFormat state_format;
+    state_vec.ToUnifiedFormat(count, state_format);
+
+    const auto state_ptr = UnifiedVectorFormat::GetData<State*>(state_format);
+    const auto input_ptr = UnifiedVectorFormat::GetData<string_t>(input_format);
+
+    for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
+      const auto state_idx = state_format.sel->get_index(raw_idx);
+      const auto input_idx = input_format.sel->get_index(raw_idx);
+
+      if (!input_format.validity.RowIsValid(input_idx)) {
+        continue;
+      }
+
+      auto& state = *state_ptr[state_idx];
+      auto& input = input_ptr[input_idx];
+
+      state.Update(input);
     }
   }
 
-  template <class INPUT_TYPE, class STATE, class OP>
-  static void ConstantOperation(STATE& state, const INPUT_TYPE& input,
-                                AggregateUnaryInput& agg, idx_t) {
-    Operation<INPUT_TYPE, STATE, OP>(state, input, agg);
+  static void SimpleUpdate(Vector inputs[], AggregateInputData& aggr_input_data,
+                           idx_t input_count, data_ptr_t state_ptr, idx_t count) {
+    auto& input_vec = inputs[0];
+    UnifiedVectorFormat input_format;
+    input_vec.ToUnifiedFormat(count, input_format);
+
+    const auto input_ptr = UnifiedVectorFormat::GetData<string_t>(input_format);
+    auto& state = *reinterpret_cast<State*>(state_ptr);
+
+    for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
+      const auto input_idx = input_format.sel->get_index(raw_idx);
+
+      if (!input_format.validity.RowIsValid(input_idx)) {
+        continue;
+      }
+
+      auto& input = input_ptr[input_idx];
+
+      state.Update(input);
+    }
   }
 
-  template <class T, class STATE>
-  static void Finalize(STATE& state, T& target, AggregateFinalizeData& finalize_data) {
-    auto rect = S2LatLngRect(state.lat, state.lng);
+  static void Combine(Vector& source, Vector& target, AggregateInputData& aggr_input_data,
+                      idx_t count) {
+    UnifiedVectorFormat source_format;
+    source.ToUnifiedFormat(count, source_format);
 
-    auto& struct_vec = StructVector::GetEntries(finalize_data.result);
-    auto min_x_data = FlatVector::GetData<double>(*struct_vec[0]);
-    auto min_y_data = FlatVector::GetData<double>(*struct_vec[1]);
-    auto max_x_data = FlatVector::GetData<double>(*struct_vec[2]);
-    auto max_y_data = FlatVector::GetData<double>(*struct_vec[3]);
+    const auto source_ptr = UnifiedVectorFormat::GetData<State*>(source_format);
+    const auto target_ptr = FlatVector::GetData<State*>(target);
 
-    idx_t i = finalize_data.result_idx;
-    min_x_data[i] = rect.lng_lo().degrees();
-    min_y_data[i] = rect.lat_lo().degrees();
-    max_x_data[i] = rect.lng_hi().degrees();
-    max_y_data[i] = rect.lat_hi().degrees();
+    for (idx_t target_idx = 0; target_idx < count; target_idx++) {
+      const auto source_idx = source_format.sel->get_index(target_idx);
+
+      // Union the two states
+      target_ptr[target_idx]->Union(*source_ptr[source_idx]);
+    }
   }
 
-  static bool IgnoreNull() { return true; }
+  static void Finalize(Vector& state_vec, AggregateInputData& aggr_input_data,
+                       Vector& result, idx_t count, idx_t offset) {
+    UnifiedVectorFormat state_format;
+    state_vec.ToUnifiedFormat(count, state_format);
+    const auto state_ptr = UnifiedVectorFormat::GetData<State*>(state_format);
+
+    auto& struct_vec = StructVector::GetEntries(result);
+    const auto min_x_data = FlatVector::GetData<double>(*struct_vec[0]);
+    const auto min_y_data = FlatVector::GetData<double>(*struct_vec[1]);
+    const auto max_x_data = FlatVector::GetData<double>(*struct_vec[2]);
+    const auto max_y_data = FlatVector::GetData<double>(*struct_vec[3]);
+
+    for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
+      const auto& state = *state_ptr[state_format.sel->get_index(raw_idx)];
+      const auto out_idx = raw_idx + offset;
+
+      auto rect = S2LatLngRect(state.lat, state.lng);
+
+      min_x_data[out_idx] = rect.lng_lo().degrees();
+      min_y_data[out_idx] = rect.lat_lo().degrees();
+      max_x_data[out_idx] = rect.lng_hi().degrees();
+      max_y_data[out_idx] = rect.lat_hi().degrees();
+    }
+  }
+
+  static void Register(ExtensionLoader& loader) {
+    AggregateFunction function("s2_bounds_box_agg", {Types::GEOGRAPHY()}, Types::S2_BOX(),
+                               StateSize, Initialize, Update, Combine, Finalize,
+                               SimpleUpdate);
+    loader.RegisterFunction(function);
+  }
 };
-
-void RegisterAgg(ExtensionLoader& loader) {
-  auto function = AggregateFunction::UnaryAggregate<BoundsAggState, string_t, string_t,
-                                                    S2BoundsRectAgg>(Types::GEOGRAPHY(),
-                                                                     Types::S2_BOX());
-
-  // Register the function
-  function.name = "s2_bounds_box_agg";
-  loader.RegisterFunction(function);
-}
 
 struct S2BoxLngLatAsWkb {
   static void Register(ExtensionLoader& loader) {
@@ -600,7 +659,7 @@ void RegisterS2GeographyBounds(ExtensionLoader& loader) {
   S2BoxIntersects::Register(loader);
   S2BoxUnion::Register(loader);
 
-  RegisterAgg(loader);
+  S2BoundsRectAgg::Register(loader);
 }
 
 }  // namespace duckdb_s2
