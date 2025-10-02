@@ -1,6 +1,5 @@
 
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include "s2/encoded_s2shape_index.h"
 #include "s2/s2shape_index_region.h"
@@ -21,9 +20,9 @@ namespace duckdb {
 namespace duckdb_s2 {
 
 struct S2GeogFromText {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_geogfromtext", [](ScalarFunctionBuilder& func) {
+        loader, "s2_geogfromtext", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("wkt", LogicalType::VARCHAR);
             variant.SetReturnType(Types::GEOGRAPHY());
@@ -47,7 +46,7 @@ SELECT 'POINT (0 1)'::GEOGRAPHY;
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_geogfromtext_novalidate", [](ScalarFunctionBuilder& func) {
+        loader, "s2_geogfromtext_novalidate", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("wkt", LogicalType::VARCHAR);
             variant.SetReturnType(Types::GEOGRAPHY());
@@ -68,9 +67,8 @@ SELECT s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)');
           func.SetTag("category", "conversion");
         });
 
-    ExtensionUtil::RegisterCastFunction(instance, LogicalType::VARCHAR,
-                                        Types::GEOGRAPHY(), BoundCastInfo(ExecuteCast),
-                                        1);
+    loader.RegisterCastFunction(LogicalType::VARCHAR, Types::GEOGRAPHY(),
+                                BoundCastInfo(ExecuteCast), 1);
   }
 
   static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
@@ -104,16 +102,15 @@ SELECT s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)');
 };
 
 struct S2AsText {
-  static void Register(DatabaseInstance& instance) {
-    FunctionBuilder::RegisterScalar(
-        instance, "s2_astext", [](ScalarFunctionBuilder& func) {
-          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
-            variant.AddParameter("geog", Types::GEOGRAPHY());
-            variant.SetReturnType(LogicalType::VARCHAR);
-            variant.SetFunction(ExecuteFn);
-          });
+  static void Register(ExtensionLoader& loader) {
+    FunctionBuilder::RegisterScalar(loader, "s2_astext", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog", Types::GEOGRAPHY());
+        variant.SetReturnType(LogicalType::VARCHAR);
+        variant.SetFunction(ExecuteFn);
+      });
 
-          func.SetDescription(R"(
+      func.SetDescription(R"(
 Returns the well-known text (WKT) string of the geography.
 
 Note that because the internal representation of the GEOGRAPHY type is either
@@ -125,41 +122,39 @@ not know that the edges are spherical, this may cause issues.
 
 Calling this function has the same effect as casting to VARCHAR.
 )");
-          func.SetExample(R"(
+      func.SetExample(R"(
 SELECT s2_astext(s2_data_city('Vancouver'));
 )");
 
-          func.SetTag("ext", "geography");
-          func.SetTag("category", "conversion");
-        });
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "conversion");
+    });
 
-    FunctionBuilder::RegisterScalar(
-        instance, "s2_format", [](ScalarFunctionBuilder& func) {
-          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
-            variant.AddParameter("geog", Types::GEOGRAPHY());
-            variant.AddParameter("precision", LogicalType::TINYINT);
-            variant.SetReturnType(LogicalType::VARCHAR);
-            variant.SetFunction(ExecuteFnPrec);
-          });
+    FunctionBuilder::RegisterScalar(loader, "s2_format", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog", Types::GEOGRAPHY());
+        variant.AddParameter("precision", LogicalType::TINYINT);
+        variant.SetReturnType(LogicalType::VARCHAR);
+        variant.SetFunction(ExecuteFnPrec);
+      });
 
-          func.SetDescription(
-              R"(
+      func.SetDescription(
+          R"(
 Returns the WKT string of the geography with a given precision.
 
 See [`s2_astext()`](#s2_text) for parameter-free lossless output. Like `s2_text()`,
 this function exports spherical edges.
 )");
-          func.SetExample(R"(
+      func.SetExample(R"(
 SELECT s2_format(s2_data_city('Vancouver'), 1);
 )");
 
-          func.SetTag("ext", "geography");
-          func.SetTag("category", "conversion");
-        });
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "conversion");
+    });
 
-    ExtensionUtil::RegisterCastFunction(instance, Types::GEOGRAPHY(),
-                                        LogicalType::VARCHAR, BoundCastInfo(ExecuteCast),
-                                        1);
+    loader.RegisterCastFunction(Types::GEOGRAPHY(), LogicalType::VARCHAR,
+                                BoundCastInfo(ExecuteCast), 1);
   }
 
   static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
@@ -203,9 +198,9 @@ SELECT s2_format(s2_data_city('Vancouver'), 1);
 };
 
 struct S2GeogFromWKB {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_geogfromwkb", [](ScalarFunctionBuilder& func) {
+        loader, "s2_geogfromwkb", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("wkb", LogicalType::BLOB);
             variant.SetReturnType(Types::GEOGRAPHY());
@@ -229,7 +224,7 @@ SELECT s2_geogfromwkb(s2_aswkb(s2_data_city('Toronto'))) as geog;
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_geogfromwkb_novalidate", [](ScalarFunctionBuilder& func) {
+        loader, "s2_geogfromwkb_novalidate", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("wkb", LogicalType::BLOB);
             variant.SetReturnType(Types::GEOGRAPHY());
@@ -279,16 +274,15 @@ SELECT s2_geogfromwkb_novalidate(
 };
 
 struct S2AsWKB {
-  static void Register(DatabaseInstance& instance) {
-    FunctionBuilder::RegisterScalar(
-        instance, "s2_aswkb", [](ScalarFunctionBuilder& func) {
-          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
-            variant.AddParameter("geog", Types::GEOGRAPHY());
-            variant.SetReturnType(LogicalType::BLOB);
-            variant.SetFunction(ExecuteFn);
-          });
+  static void Register(ExtensionLoader& loader) {
+    FunctionBuilder::RegisterScalar(loader, "s2_aswkb", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog", Types::GEOGRAPHY());
+        variant.SetReturnType(LogicalType::BLOB);
+        variant.SetFunction(ExecuteFn);
+      });
 
-          func.SetDescription(R"(
+      func.SetDescription(R"(
 Serialize a GEOGRAPHY as well-known binary (WKB).
 
 Note that because the internal representation of the GEOGRAPHY type is either
@@ -298,13 +292,13 @@ GEOGRAPHY.
 The output contains spherical edges. If edges are large and the consumer does
 not know that the edges are spherical, this may cause issues.
 )");
-          func.SetExample(R"(
+      func.SetExample(R"(
 SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
 )");
 
-          func.SetTag("ext", "geography");
-          func.SetTag("category", "conversion");
-        });
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "conversion");
+    });
   }
 
   static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
@@ -325,9 +319,9 @@ SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
 };
 
 struct S2GeogPrepare {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_prepare", [](ScalarFunctionBuilder& func) {
+        loader, "s2_prepare", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog", Types::GEOGRAPHY());
             variant.SetReturnType(Types::GEOGRAPHY());
@@ -401,12 +395,12 @@ void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count,
   S2AsWKB::Execute(source, result, count, options);
 }
 
-void RegisterS2GeographyFunctionsIO(DatabaseInstance& instance) {
-  S2GeogFromText::Register(instance);
-  S2GeogFromWKB::Register(instance);
-  S2AsText::Register(instance);
-  S2AsWKB::Register(instance);
-  S2GeogPrepare::Register(instance);
+void RegisterS2GeographyFunctionsIO(ExtensionLoader& loader) {
+  S2GeogFromText::Register(loader);
+  S2GeogFromWKB::Register(loader);
+  S2AsText::Register(loader);
+  S2AsWKB::Register(loader);
+  S2GeogPrepare::Register(loader);
 }
 
 }  // namespace duckdb_s2

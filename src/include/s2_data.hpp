@@ -6,7 +6,7 @@ namespace duckdb {
 
 namespace duckdb_s2 {
 
-void RegisterS2Data(DatabaseInstance& instance);
+void RegisterS2Data(ExtensionLoader& loader);
 
 }
 }  // namespace duckdb

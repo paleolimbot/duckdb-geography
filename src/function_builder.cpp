@@ -1,13 +1,14 @@
 #include "function_builder.hpp"
 #include "duckdb/catalog/catalog_entry/function_entry.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
-void FunctionBuilder::Register(DatabaseInstance& db, const char* name,
+void FunctionBuilder::Register(ExtensionLoader& loader, const char* name,
                                ScalarFunctionBuilder& builder) {
   // Register the function
-  ExtensionUtil::RegisterFunction(db, std::move(builder.set));
+  loader.RegisterFunction(std::move(builder.set));
+
+  auto& db = loader.GetDatabaseInstance();
 
   // Also add the parameter names. We need to access the catalog entry for this.
   auto& catalog = Catalog::GetSystemCatalog(db);

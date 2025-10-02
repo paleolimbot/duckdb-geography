@@ -8,17 +8,17 @@ namespace duckdb {
 
 namespace duckdb_s2 {
 
-void RegisterS2GeographyPredicates(DatabaseInstance& instance);
-void RegisterS2GeographyAccessors(DatabaseInstance& instance);
-void RegisterS2GeographyBounds(DatabaseInstance& instance);
-void RegisterGeoArrowExtensions(DatabaseInstance& instance);
+void RegisterS2GeographyPredicates(ExtensionLoader& loader);
+void RegisterS2GeographyAccessors(ExtensionLoader& loader);
+void RegisterS2GeographyBounds(ExtensionLoader& loader);
+void RegisterGeoArrowExtensions(ExtensionLoader& loader);
 
-inline void RegisterS2GeographyOps(DatabaseInstance& instance) {
-  RegisterS2GeographyFunctionsIO(instance);
-  RegisterS2GeographyPredicates(instance);
-  RegisterS2GeographyAccessors(instance);
-  RegisterS2GeographyBounds(instance);
-  RegisterGeoArrowExtensions(instance);
+inline void RegisterS2GeographyOps(ExtensionLoader& loader) {
+  RegisterS2GeographyFunctionsIO(loader);
+  RegisterS2GeographyPredicates(loader);
+  RegisterS2GeographyAccessors(loader);
+  RegisterS2GeographyBounds(loader);
+  RegisterGeoArrowExtensions(loader);
 }
 
 }  // namespace duckdb_s2

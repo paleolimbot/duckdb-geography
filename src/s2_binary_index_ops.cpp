@@ -1,6 +1,5 @@
 
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include "s2/s2cell_union.h"
 #include "s2/s2closest_edge_query.h"
@@ -51,9 +50,9 @@ static auto DispatchShapeIndexOp(UniqueGeography lhs, UniqueGeography rhs,
 }
 
 struct S2BinaryIndexOp {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_mayintersect", [](ScalarFunctionBuilder& func) {
+        loader, "s2_mayintersect", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -84,7 +83,7 @@ SELECT s2_mayintersect(s2_data_country('Canada'), s2_data_city('Berlin'));
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_intersects", [](ScalarFunctionBuilder& func) {
+        loader, "s2_intersects", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -107,7 +106,7 @@ SELECT s2_intersects(s2_data_country('Canada'), s2_data_city('Chicago'));
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_contains", [](ScalarFunctionBuilder& func) {
+        loader, "s2_contains", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -131,33 +130,32 @@ SELECT s2_contains(s2_data_country('Canada'), s2_data_city('Chicago'));
           func.SetTag("category", "predicates");
         });
 
-    FunctionBuilder::RegisterScalar(
-        instance, "s2_equals", [](ScalarFunctionBuilder& func) {
-          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
-            variant.AddParameter("geog1", Types::GEOGRAPHY());
-            variant.AddParameter("geog2", Types::GEOGRAPHY());
-            variant.SetReturnType(LogicalType::BOOLEAN);
-            variant.SetFunction(ExecuteEqualsFn);
-          });
+    FunctionBuilder::RegisterScalar(loader, "s2_equals", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog1", Types::GEOGRAPHY());
+        variant.AddParameter("geog2", Types::GEOGRAPHY());
+        variant.SetReturnType(LogicalType::BOOLEAN);
+        variant.SetFunction(ExecuteEqualsFn);
+      });
 
-          func.SetDescription(R"(
+      func.SetDescription(R"(
 Returns true if the two geographies are equal.
 
 Note that this test of equality will pass for *geometrically* equal geographies
 that may have the same edges but that are ordered differently.
 )");
-          func.SetExample(R"(
+      func.SetExample(R"(
 SELECT s2_equals(s2_data_country('Canada'), s2_data_country('Canada'));
 ----
 SELECT s2_equals(s2_data_city('Toronto'), s2_data_country('Canada'));
 )");
 
-          func.SetTag("ext", "geography");
-          func.SetTag("category", "predicates");
-        });
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "predicates");
+    });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_intersection", [](ScalarFunctionBuilder& func) {
+        loader, "s2_intersection", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -181,7 +179,7 @@ SELECT s2_intersection(
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_difference", [](ScalarFunctionBuilder& func) {
+        loader, "s2_difference", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -204,29 +202,28 @@ SELECT s2_difference(
           func.SetTag("category", "overlay");
         });
 
-    FunctionBuilder::RegisterScalar(
-        instance, "s2_union", [](ScalarFunctionBuilder& func) {
-          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
-            variant.AddParameter("geog1", Types::GEOGRAPHY());
-            variant.AddParameter("geog2", Types::GEOGRAPHY());
-            variant.SetReturnType(Types::GEOGRAPHY());
-            variant.SetFunction(ExecuteUnionFn);
-          });
+    FunctionBuilder::RegisterScalar(loader, "s2_union", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog1", Types::GEOGRAPHY());
+        variant.AddParameter("geog2", Types::GEOGRAPHY());
+        variant.SetReturnType(Types::GEOGRAPHY());
+        variant.SetFunction(ExecuteUnionFn);
+      });
 
-          func.SetDescription(R"(
+      func.SetDescription(R"(
 Returns the union of two geographies.
 )");
 
-          func.SetExample(R"(
+      func.SetExample(R"(
 SELECT s2_union(
   'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))',
   'POLYGON ((5 5, 15 5, 15 15, 5 15, 5 5))'
 ) as union_
 )");
 
-          func.SetTag("ext", "geography");
-          func.SetTag("category", "overlay");
-        });
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "overlay");
+    });
   }
 
   static void ExecuteMayIntersectFn(DataChunk& args, ExpressionState& state,
@@ -465,9 +462,9 @@ SELECT s2_union(
 };
 
 struct S2DWithin {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_dwithin", [](ScalarFunctionBuilder& func) {
+        loader, "s2_dwithin", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -547,9 +544,9 @@ SELECT s2_dwithin(
 };
 
 struct S2Distance {
-  static void Register(DatabaseInstance& instance) {
+  static void Register(ExtensionLoader& loader) {
     FunctionBuilder::RegisterScalar(
-        instance, "s2_distance", [](ScalarFunctionBuilder& func) {
+        loader, "s2_distance", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -572,7 +569,7 @@ SELECT s2_distance(
         });
 
     FunctionBuilder::RegisterScalar(
-        instance, "s2_max_distance", [](ScalarFunctionBuilder& func) {
+        loader, "s2_max_distance", [](ScalarFunctionBuilder& func) {
           func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
             variant.AddParameter("geog1", Types::GEOGRAPHY());
             variant.AddParameter("geog2", Types::GEOGRAPHY());
@@ -653,10 +650,10 @@ SELECT s2_max_distance(
 
 }  // namespace
 
-void RegisterS2GeographyPredicates(DatabaseInstance& instance) {
-  S2BinaryIndexOp::Register(instance);
-  S2Distance::Register(instance);
-  S2DWithin::Register(instance);
+void RegisterS2GeographyPredicates(ExtensionLoader& loader) {
+  S2BinaryIndexOp::Register(loader);
+  S2Distance::Register(loader);
+  S2DWithin::Register(loader);
 }
 
 }  // namespace duckdb_s2

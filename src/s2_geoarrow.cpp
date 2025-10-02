@@ -3,7 +3,6 @@
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include "geoarrow/geoarrow.hpp"
 
@@ -128,10 +127,10 @@ void GeoArrowRegisterScan(ClientContext& context, TableFunctionInput& data_p,
 }
 }  // namespace
 
-void RegisterGeoArrowExtensions(DatabaseInstance& instance) {
+void RegisterGeoArrowExtensions(ExtensionLoader& loader) {
   TableFunction register_func("s2_register_geoarrow_extensions", {}, GeoArrowRegisterScan,
                               GeoArrowRegisterBind);
-  ExtensionUtil::RegisterFunction(instance, register_func);
+  loader.RegisterFunction(register_func);
 }
 
 }  // namespace duckdb_s2

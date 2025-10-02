@@ -1,7 +1,6 @@
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include <absl/base/config.h>
 #include <s2geography.h>
@@ -143,8 +142,8 @@ const std::vector<City>& ItemList() {
 
 template <typename T>
 struct S2DataScalar {
-  static void Register(DatabaseInstance& instance, const char* fn_name) {
-    FunctionBuilder::RegisterScalar(instance, fn_name, [](ScalarFunctionBuilder& func) {
+  static void Register(ExtensionLoader& loader, const char* fn_name) {
+    FunctionBuilder::RegisterScalar(loader, fn_name, [](ScalarFunctionBuilder& func) {
       func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
         variant.AddParameter("name", LogicalType::VARCHAR);
         variant.SetReturnType(Types::GEOGRAPHY());
@@ -192,16 +191,16 @@ SELECT s2_data_country('Fiji') as country;
 
 }  // namespace
 
-void RegisterS2Data(DatabaseInstance& instance) {
+void RegisterS2Data(ExtensionLoader& loader) {
   TableFunction cities_func("s2_data_cities", {}, S2DataCitiesScan, S2DataCitiesBind);
-  ExtensionUtil::RegisterFunction(instance, cities_func);
+  loader.RegisterFunction(cities_func);
 
   TableFunction countries_func("s2_data_countries", {}, S2DataCountriesScan,
                                S2DataCountriesBind);
-  ExtensionUtil::RegisterFunction(instance, countries_func);
+  loader.RegisterFunction(countries_func);
 
-  S2DataScalar<City>::Register(instance, "s2_data_city");
-  S2DataScalar<Country>::Register(instance, "s2_data_country");
+  S2DataScalar<City>::Register(loader, "s2_data_city");
+  S2DataScalar<Country>::Register(loader, "s2_data_country");
 }
 
 }  // namespace duckdb_s2

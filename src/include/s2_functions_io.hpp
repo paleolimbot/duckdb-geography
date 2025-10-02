@@ -16,6 +16,6 @@ void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count,
                           const s2geography::geoarrow::ExportOptions& options =
                               s2geography::geoarrow::ExportOptions());
 
-void RegisterS2GeographyFunctionsIO(DatabaseInstance& instance);
+void RegisterS2GeographyFunctionsIO(ExtensionLoader& loader);
 }  // namespace duckdb_s2
 }  // namespace duckdb

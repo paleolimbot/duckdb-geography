@@ -1,10 +1,10 @@
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 #include <absl/base/config.h>
 #include <openssl/opensslv.h>
 #include <s2geography.h>
 
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "geoarrow/geoarrow.h"
 #include "nanoarrow/nanoarrow.h"
 
@@ -63,10 +63,10 @@ void S2DependenciesScan(ClientContext& context, TableFunctionInput& data_p,
 
 }  // namespace
 
-void RegisterS2Dependencies(DatabaseInstance& instance) {
+void RegisterS2Dependencies(ExtensionLoader& loader) {
   TableFunction versions_func("s2_dependencies", {}, S2DependenciesScan,
                               S2DependenciesBind);
-  ExtensionUtil::RegisterFunction(instance, versions_func);
+  loader.RegisterFunction(versions_func);
 }
 
 }  // namespace duckdb_s2
