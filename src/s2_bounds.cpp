@@ -1,11 +1,11 @@
 
-#include <cstring>
-
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/main/database.hpp"
 
 #include "s2/s2cell_union.h"
 #include "s2/s2region_coverer.h"
+
+#include "s2_endian.hpp"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
@@ -438,23 +438,18 @@ SELECT s2_box_wkb(s2_bounds_box('POINT (0 1)'::GEOGRAPHY)) as rect;
         });
   }
 
-  static void StoreDouble(char* dest, double value) {
-    // Store double in little-endian format using memcpy (safe and portable)
-    std::memcpy(dest, &value, sizeof(double));
-  }
-
   static void PopulateCoordsFromValues(char* coords, double xmin, double ymin,
                                        double xmax, double ymax) {
-    StoreDouble(coords + 0 * sizeof(double), xmin);
-    StoreDouble(coords + 1 * sizeof(double), ymin);
-    StoreDouble(coords + 2 * sizeof(double), xmax);
-    StoreDouble(coords + 3 * sizeof(double), ymin);
-    StoreDouble(coords + 4 * sizeof(double), xmax);
-    StoreDouble(coords + 5 * sizeof(double), ymax);
-    StoreDouble(coords + 6 * sizeof(double), xmin);
-    StoreDouble(coords + 7 * sizeof(double), ymax);
-    StoreDouble(coords + 8 * sizeof(double), xmin);
-    StoreDouble(coords + 9 * sizeof(double), ymin);
+    StoreDoubleLE(coords + 0 * sizeof(double), xmin);
+    StoreDoubleLE(coords + 1 * sizeof(double), ymin);
+    StoreDoubleLE(coords + 2 * sizeof(double), xmax);
+    StoreDoubleLE(coords + 3 * sizeof(double), ymin);
+    StoreDoubleLE(coords + 4 * sizeof(double), xmax);
+    StoreDoubleLE(coords + 5 * sizeof(double), ymax);
+    StoreDoubleLE(coords + 6 * sizeof(double), xmin);
+    StoreDoubleLE(coords + 7 * sizeof(double), ymax);
+    StoreDoubleLE(coords + 8 * sizeof(double), xmin);
+    StoreDoubleLE(coords + 9 * sizeof(double), ymin);
   }
 };
 

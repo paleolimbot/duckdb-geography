@@ -1,7 +1,4 @@
 
-#include <cstdint>
-#include <cstring>
-
 #include "duckdb/main/database.hpp"
 
 #include "s2/s2cell.h"
@@ -9,6 +6,7 @@
 #include "s2geography/op/cell.h"
 #include "s2geography/op/point.h"
 
+#include "s2_endian.hpp"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
@@ -19,35 +17,6 @@ namespace duckdb {
 namespace duckdb_s2 {
 
 namespace {
-
-// Helper functions for endian-aware loading since s2geometry v0.12+ removed template
-// Load<T>
-inline double LoadDoubleLE(const void* p) {
-  double result;
-  std::memcpy(&result, p, sizeof(double));
-  return result;
-}
-
-inline double LoadDoubleBE(const void* p) {
-  uint64_t val;
-  std::memcpy(&val, p, sizeof(uint64_t));
-  // Byte swap for big endian
-  val = ((val & 0x00000000000000FFULL) << 56) | ((val & 0x000000000000FF00ULL) << 40) |
-        ((val & 0x0000000000FF0000ULL) << 24) | ((val & 0x00000000FF000000ULL) << 8) |
-        ((val & 0x000000FF00000000ULL) >> 8) | ((val & 0x0000FF0000000000ULL) >> 24) |
-        ((val & 0x00FF000000000000ULL) >> 40) | ((val & 0xFF00000000000000ULL) >> 56);
-  double result;
-  std::memcpy(&result, &val, sizeof(double));
-  return result;
-}
-
-inline uint32_t LoadUInt32BE(const void* p) {
-  uint32_t val;
-  std::memcpy(&val, p, sizeof(uint32_t));
-  // Byte swap for big endian
-  return ((val & 0x000000FFU) << 24) | ((val & 0x0000FF00U) << 8) |
-         ((val & 0x00FF0000U) >> 8) | ((val & 0xFF000000U) >> 24);
-}
 
 struct S2CellCenterFromGeography {
   static inline bool ExecuteCast(Vector& source, Vector& result, idx_t count,
