@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
+# Trigger CI re-run after extension-ci-tools Abseil upgrade
 include(FetchContent)
 
 # Set extension name here
