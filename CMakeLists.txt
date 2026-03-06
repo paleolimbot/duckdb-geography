@@ -65,6 +65,7 @@ add_library(
   s2geometry/src/s2/s2cell_index.cc
   s2geometry/src/s2/s2cell_union.cc
   s2geometry/src/s2/s2centroids.cc
+  s2geometry/src/s2/s2chain_interpolation_query.cc
   s2geometry/src/s2/s2closest_cell_query.cc
   s2geometry/src/s2/s2closest_edge_query.cc
   s2geometry/src/s2/s2closest_point_query.cc
@@ -73,6 +74,7 @@ add_library(
   s2geometry/src/s2/s2coords.cc
   s2geometry/src/s2/s2crossing_edge_query.cc
   s2geometry/src/s2/s2debug.cc
+  s2geometry/src/s2/s2density_tree.cc
   s2geometry/src/s2/s2earth.cc
   s2geometry/src/s2/s2edge_clipping.cc
   s2geometry/src/s2/s2edge_crosser.cc
@@ -80,6 +82,7 @@ add_library(
   s2geometry/src/s2/s2edge_distances.cc
   s2geometry/src/s2/s2edge_tessellator.cc
   s2geometry/src/s2/s2error.cc
+  s2geometry/src/s2/s2fractal.cc
   s2geometry/src/s2/s2furthest_edge_query.cc
   s2geometry/src/s2/s2hausdorff_distance_query.cc
   s2geometry/src/s2/s2latlng.cc
@@ -107,10 +110,11 @@ add_library(
   s2geometry/src/s2/s2predicates.cc
   s2geometry/src/s2/s2projections.cc
   s2geometry/src/s2/s2r2rect.cc
-  s2geometry/src/s2/s2region.cc
-  s2geometry/src/s2/s2region_term_indexer.cc
+  s2geometry/src/s2/s2random.cc
   s2geometry/src/s2/s2region_coverer.cc
   s2geometry/src/s2/s2region_intersection.cc
+  s2geometry/src/s2/s2region_sharder.cc
+  s2geometry/src/s2/s2region_term_indexer.cc
   s2geometry/src/s2/s2region_union.cc
   s2geometry/src/s2/s2shape_index.cc
   s2geometry/src/s2/s2shape_index_buffered_region.cc
@@ -123,10 +127,15 @@ add_library(
   s2geometry/src/s2/s2shapeutil_conversion.cc
   s2geometry/src/s2/s2shapeutil_edge_iterator.cc
   s2geometry/src/s2/s2shapeutil_get_reference_point.cc
+  s2geometry/src/s2/s2shapeutil_count_vertices.cc
+  s2geometry/src/s2/s2shapeutil_edge_wrap.cc
   s2geometry/src/s2/s2shapeutil_visit_crossing_edge_pairs.cc
   s2geometry/src/s2/s2text_format.cc
   s2geometry/src/s2/s2wedge_relations.cc
   s2geometry/src/s2/s2winding_operation.cc
+  s2geometry/src/s2/internal/s2index_cell_data.cc
+  s2geometry/src/s2/internal/s2incident_edge_tracker.cc
+  s2geometry/src/s2/base/malloc_extension.cc
   s2geometry/src/s2/util/bits/bit-interleave.cc
   s2geometry/src/s2/util/coding/coder.cc
   s2geometry/src/s2/util/coding/varint.cc
@@ -183,7 +192,7 @@ target_link_libraries(
 # Build s2geography
 add_library(s2::s2 ALIAS s2)
 set(S2_VERSION_MAJOR 0)
-set(S2_VERSION_MINOR 11)
+set(S2_VERSION_MINOR 13)
 set(S2_VERSION_PATCH 1)
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(s2geography)
