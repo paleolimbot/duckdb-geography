@@ -16,7 +16,7 @@ namespace duckdb_s2 {
 namespace {
 
 struct GeoArrowWKB {
-  static unique_ptr<ArrowType> GetType(const ArrowSchema& schema,
+  static unique_ptr<ArrowType> GetType(ClientContext& context, const ArrowSchema& schema,
                                        const ArrowSchemaMetadata& schema_metadata) {
     // Validate extension metadata. This metadata also contains a CRS, which we drop
     // because the GEOGRAPHY type does not implement a CRS at the type level.
@@ -118,8 +118,14 @@ void GeoArrowRegisterScan(ClientContext& context, TableFunctionInput& data_p,
   if (config.HasArrowExtension(Types::GEOGRAPHY())) {
     output.SetValue(0, 0, false);
   } else {
-    RegisterArrowExtensions(config);
-    output.SetValue(0, 0, true);
+    try {
+      RegisterArrowExtensions(config);
+      output.SetValue(0, 0, true);
+    } catch (const NotImplementedException&) {
+      // DuckDB v1.5+ auto-registers geoarrow.wkb for GEOMETRY type,
+      // which conflicts with our GEOGRAPHY registration.
+      output.SetValue(0, 0, false);
+    }
   }
 
   output.SetCardinality(1);

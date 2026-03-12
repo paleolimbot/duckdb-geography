@@ -6,4 +6,4 @@ require geography
 query I
 SELECT * FROM s2_register_geoarrow_extensions();
 ----
-true
+false
