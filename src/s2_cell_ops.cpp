@@ -6,6 +6,7 @@
 #include "s2geography/op/cell.h"
 #include "s2geography/op/point.h"
 
+#include "s2_endian.hpp"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
@@ -325,7 +326,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
     if (le) {
       geometry_type = LittleEndian::Load32(decoder->skip(sizeof(uint32_t)));
     } else {
-      geometry_type = BigEndian::Load32(decoder->skip(sizeof(uint32_t)));
+      geometry_type = LoadUInt32BE(decoder->skip(sizeof(uint32_t)));
     }
 
     if (geometry_type & ewkb_srid_bit) {
@@ -368,7 +369,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
     if (le) {
       n = LittleEndian::Load32(decoder->skip(sizeof(uint32_t)));
     } else {
-      n = BigEndian::Load32(decoder->skip(sizeof(uint32_t)));
+      n = LoadUInt32BE(decoder->skip(sizeof(uint32_t)));
     }
 
     for (uint32_t i = 0; i < n; i++) {
@@ -393,7 +394,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
     if (le) {
       n = LittleEndian::Load32(decoder->skip(sizeof(uint32_t)));
     } else {
-      n = BigEndian::Load32(decoder->skip(sizeof(uint32_t)));
+      n = LoadUInt32BE(decoder->skip(sizeof(uint32_t)));
     }
 
     for (uint32_t i = 0; i < n; i++) {
@@ -418,7 +419,7 @@ SELECT * FROM glob('cities/**') LIMIT 5;
     if (le) {
       n = LittleEndian::Load32(decoder->skip(sizeof(uint32_t)));
     } else {
-      n = BigEndian::Load32(decoder->skip(sizeof(uint32_t)));
+      n = LoadUInt32BE(decoder->skip(sizeof(uint32_t)));
     }
 
     for (uint32_t i = 0; i < n; i++) {
@@ -441,11 +442,11 @@ SELECT * FROM glob('cities/**') LIMIT 5;
 
     double lnglat[2];
     if (le) {
-      lnglat[0] = LittleEndian::Load<double>(decoder->skip(sizeof(double)));
-      lnglat[1] = LittleEndian::Load<double>(decoder->skip(sizeof(double)));
+      lnglat[0] = LoadDoubleLE(decoder->skip(sizeof(double)));
+      lnglat[1] = LoadDoubleLE(decoder->skip(sizeof(double)));
     } else {
-      lnglat[0] = BigEndian::Load<double>(decoder->skip(sizeof(double)));
-      lnglat[1] = BigEndian::Load<double>(decoder->skip(sizeof(double)));
+      lnglat[0] = LoadDoubleBE(decoder->skip(sizeof(double)));
+      lnglat[1] = LoadDoubleBE(decoder->skip(sizeof(double)));
     }
 
     if (std::isnan(lnglat[0]) || std::isnan(lnglat[1])) {
