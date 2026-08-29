@@ -5,8 +5,14 @@ include(FetchContent)
 # Set extension name here
 set(TARGET_NAME geography)
 
-# Required for S2
-set(CMAKE_CXX_STANDARD 17)
+# Required for S2. CACHE ... FORCE so DuckDB's own build picks it up too:
+# DuckDB configures C++11, where the static constexpr class-type member
+# duckdb::BufferedFileWriter::DEFAULT_OPEN_FLAGS is not implicitly inline, and
+# GCC 14 on aarch64 then rejects the duplicate when linking tools/plan_serializer
+# (duckdb/duckdb#22097). That tool arrived in DuckDB v1.5.2, which is exactly
+# when this extension stopped building.
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to enforce" FORCE)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # DuckDB's extension distribution supports vcpkg. As such, dependencies can be
 # added in ./vcpkg.json and then used in cmake with find_package. Feel free to
