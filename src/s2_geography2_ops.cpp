@@ -5,6 +5,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 
+#include "s2_functions_io.hpp"
 #include "s2_types.hpp"
 #include "s2geography/wkb.h"
 #include "s2geography/wkt-reader.h"
@@ -117,13 +118,7 @@ static void FromWkb(DataChunk& args, ExpressionState&, Vector& result) {
 }
 
 static void AsText(DataChunk& args, ExpressionState&, Vector& result) {
-  s2geography::WKBReader reader;
-  s2geography::WKTWriter writer;
-  UnaryExecutor::Execute<string_t, string_t>(
-      args.data[0], result, args.size(), [&](string_t wkb) {
-        auto geog = reader.ReadFeature(std::string_view(wkb.GetData(), wkb.GetSize()));
-        return StringVector::AddString(result, writer.write_feature(*geog));
-      });
+  ExportWKBToWKT(args.data[0], result, args.size());
 }
 
 static void AsWkb(DataChunk& args, ExpressionState&, Vector& result) {
