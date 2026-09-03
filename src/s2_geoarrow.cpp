@@ -131,6 +131,54 @@ void GeoArrowRegisterScan(ClientContext& context, TableFunctionInput& data_p,
 }
 }  // namespace
 
+void ImportWKTToWKB(Vector& source, Vector& result, idx_t count) {
+  struct GeoArrowWKTReader reader{};
+  struct GeoArrowWKBWriter writer{};
+  struct GeoArrowError error{};
+
+  if (GeoArrowWKTReaderInit(&reader) != GEOARROW_OK) {
+    throw InvalidInputException("GeoArrow WKT reader initialization failed");
+  }
+
+  if (GeoArrowWKBWriterInit(&writer) != GEOARROW_OK) {
+    GeoArrowWKTReaderReset(&reader);
+    throw InvalidInputException("GeoArrow WKB writer initialization failed");
+  }
+
+  try {
+    UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkt) {
+      struct GeoArrowVisitor visitor{};
+      GeoArrowWKBWriterInitVisitor(&writer, &visitor);
+      visitor.error = &error;
+
+      struct GeoArrowStringView wkt_view{wkt.GetData(),
+                                         static_cast<int64_t>(wkt.GetSize())};
+      if (GeoArrowWKTReaderVisit(&reader, wkt_view, &visitor) != GEOARROW_OK) {
+        throw InvalidInputException("GeoArrow WKT parse error: %s", error.message);
+      }
+
+      struct ArrowArray array{};
+      if (GeoArrowWKBWriterFinish(&writer, &array, &error) != GEOARROW_OK) {
+        throw InvalidInputException("GeoArrow WKB export error: %s", error.message);
+      }
+
+      const auto offsets = static_cast<const int32_t*>(array.buffers[1]);
+      const auto data = static_cast<const char*>(array.buffers[2]);
+      auto value = StringVector::AddStringOrBlob(result, data + offsets[0],
+                                                 offsets[1] - offsets[0]);
+      array.release(&array);
+      return value;
+    });
+  } catch (...) {
+    GeoArrowWKBWriterReset(&writer);
+    GeoArrowWKTReaderReset(&reader);
+    throw;
+  }
+
+  GeoArrowWKBWriterReset(&writer);
+  GeoArrowWKTReaderReset(&reader);
+}
+
 void ExportWKBToWKT(Vector& source, Vector& result, idx_t count) {
   struct GeoArrowWKBReader reader{};
   struct GeoArrowWKTWriter writer{};

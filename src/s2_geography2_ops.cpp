@@ -7,9 +7,6 @@
 
 #include "s2_functions_io.hpp"
 #include "s2_types.hpp"
-#include "s2geography/wkb.h"
-#include "s2geography/wkt-reader.h"
-#include "s2geography/wkt-writer.h"
 #include "s2geography_c.h"
 
 namespace duckdb {
@@ -88,14 +85,7 @@ class CApiContext {
 };
 
 static void FromText(DataChunk& args, ExpressionState&, Vector& result) {
-  auto& source = args.data[0];
-  const auto count = args.size();
-  s2geography::WKTReader reader;
-  s2geography::WKBWriter writer;
-  UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkt) {
-    auto geog = reader.read_feature(wkt.GetData(), wkt.GetSize());
-    return StringVector::AddStringOrBlob(result, writer.WriteFeature(*geog));
-  });
+  ImportWKTToWKB(args.data[0], result, args.size());
 }
 
 static void FromWkb(DataChunk& args, ExpressionState&, Vector& result) {
@@ -145,12 +135,7 @@ static void DWithin(DataChunk& args, ExpressionState&, Vector& result) {
 }
 
 static bool CastFromText(Vector& source, Vector& result, idx_t count, CastParameters&) {
-  s2geography::WKTReader reader;
-  s2geography::WKBWriter writer;
-  UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkt) {
-    auto geog = reader.read_feature(wkt.GetData(), wkt.GetSize());
-    return StringVector::AddStringOrBlob(result, writer.WriteFeature(*geog));
-  });
+  ImportWKTToWKB(source, result, count);
   return true;
 }
 

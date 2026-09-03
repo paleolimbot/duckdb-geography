@@ -151,7 +151,6 @@ if(WIN32 AND NOT MSVC)
   set(S2_EXTRA_OPENSSL_LIBS crypt32 z ws2_32 gdi32 crypt32)
 elseif(MSVC)
   target_compile_definitions(s2 PUBLIC NOMINMAX _USE_MATH_DEFINES)
-  target_compile_options(s2 PUBLIC /J)
 else()
   # target_compile_definitions(s2 PRIVATE -Wno-attributes
   # -Wno-deprecated-declarations "-Wno-comment" -Wno-pedantic )
