@@ -386,13 +386,11 @@ LIMIT 5;
 };
 
 void ImportWKBToGeography(Vector& source, Vector& result, idx_t count) {
-  S2GeogFromWKB::Execute(source, result, count,
-                         s2geography::geoarrow::ImportOptions());
+  S2GeogFromWKB::Execute(source, result, count, s2geography::geoarrow::ImportOptions());
 }
 
 void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count) {
-  S2AsWKB::Execute(source, result, count,
-                   s2geography::geoarrow::ExportOptions());
+  S2AsWKB::Execute(source, result, count, s2geography::geoarrow::ExportOptions());
 }
 
 void RegisterS2GeographyFunctionsIO(ExtensionLoader& loader) {

@@ -163,8 +163,8 @@ endif()
 target_compile_definitions(s2 PUBLIC Encoder=S2Encoder)
 
 # Recent Abseil releases fail to compile the S2 stack with GCC when UBSan is
-# enabled (constant evaluation rejects Abseil's sanitizer instrumentation).
-# Keep DuckDB's other Debug sanitizers enabled and disable UBSan only here.
+# enabled (constant evaluation rejects Abseil's sanitizer instrumentation). Keep
+# DuckDB's other Debug sanitizers enabled and disable UBSan only here.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(s2 PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
   target_compile_definitions(s2 PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
@@ -210,20 +210,20 @@ add_subdirectory(s2geography)
 target_compile_definitions(
   s2geography PRIVATE -DGEOARROW_FAST_FLOAT_NAMESPACE=duckdb_fast_float)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  target_compile_options(
-    s2geography PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
-  target_compile_options(
-    s2geography_c PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
-  target_compile_definitions(
-    s2geography PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
-  target_compile_definitions(
-    s2geography_c PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+  target_compile_options(s2geography
+                         PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_options(s2geography_c
+                         PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_definitions(s2geography
+                             PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+  target_compile_definitions(s2geography_c
+                             PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
 endif()
 
 # Keep the extension's GeoArrow and nanoarrow symbols separate from the vendored
 # copies used internally by s2geography. In particular, s2geography must be
-# configured before these targets exist or it will link against their differently
-# namespaced ABI instead of compiling its own implementation.
+# configured before these targets exist or it will link against their
+# differently namespaced ABI instead of compiling its own implementation.
 set(NANOARROW_NAMESPACE DuckDBGeography)
 set(GEOARROW_NAMESPACE DuckDBGeography)
 FetchContent_MakeAvailable(nanoarrow)
@@ -259,15 +259,14 @@ build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  target_compile_options(
-    ${EXTENSION_NAME} PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
-  target_compile_options(
-    ${LOADABLE_EXTENSION_NAME}
-    PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
-  target_compile_definitions(
-    ${EXTENSION_NAME} PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
-  target_compile_definitions(
-    ${LOADABLE_EXTENSION_NAME} PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+  target_compile_options(${EXTENSION_NAME}
+                         PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_options(${LOADABLE_EXTENSION_NAME}
+                         PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_definitions(${EXTENSION_NAME}
+                             PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+  target_compile_definitions(${LOADABLE_EXTENSION_NAME}
+                             PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
 endif()
 
 # Link OpenSSL in both the static library as the loadable extension
