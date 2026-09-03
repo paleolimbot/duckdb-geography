@@ -72,9 +72,6 @@ struct GeoArrowWKB {
 
   static void ArrowToDuck(ClientContext& context, Vector& source, Vector& result,
                           idx_t count) {
-    s2geography::geoarrow::ImportOptions options;
-    options.set_check(false);
-    options.set_oriented(true);
     ImportWKBToGeography(source, result, count);
   }
 

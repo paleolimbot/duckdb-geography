@@ -23,22 +23,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(OpenSSL REQUIRED)
 find_package(absl REQUIRED)
 
-set(NANOARROW_NAMESPACE DuckDBGeography)
 FetchContent_Declare(
   nanoarrow
   URL https://github.com/apache/arrow-nanoarrow/archive/refs/tags/apache-arrow-nanoarrow-0.7.0.zip
   URL_HASH
     SHA256=bd40a2ee849c650b243818b12e925cac17f8fc300acacd141177345fd6b2e9f4)
 
-set(GEOARROW_NAMESPACE DuckDBGeography)
 FetchContent_Declare(
   geoarrow
   URL https://github.com/geoarrow/geoarrow-c/archive/e4ba826fd8e4012bf67b27c2cb64313a78627ed8.zip
   URL_HASH
     SHA256=398874eb854cfcb5afa594bc4b48be0d2f9cf1937ed9d4bf59657bd4cbdeb396)
-
-FetchContent_MakeAvailable(nanoarrow)
-FetchContent_MakeAvailable(geoarrow)
 
 # S2's CMake is pretty awful so we just build the library ourselves
 add_library(
@@ -73,6 +68,7 @@ add_library(
   s2geometry/src/s2/s2cell_index.cc
   s2geometry/src/s2/s2cell_union.cc
   s2geometry/src/s2/s2centroids.cc
+  s2geometry/src/s2/s2chain_interpolation_query.cc
   s2geometry/src/s2/s2closest_cell_query.cc
   s2geometry/src/s2/s2closest_edge_query.cc
   s2geometry/src/s2/s2closest_point_query.cc
@@ -81,6 +77,7 @@ add_library(
   s2geometry/src/s2/s2coords.cc
   s2geometry/src/s2/s2crossing_edge_query.cc
   s2geometry/src/s2/s2debug.cc
+  s2geometry/src/s2/s2density_tree.cc
   s2geometry/src/s2/s2earth.cc
   s2geometry/src/s2/s2edge_clipping.cc
   s2geometry/src/s2/s2edge_crosser.cc
@@ -88,6 +85,7 @@ add_library(
   s2geometry/src/s2/s2edge_distances.cc
   s2geometry/src/s2/s2edge_tessellator.cc
   s2geometry/src/s2/s2error.cc
+  s2geometry/src/s2/s2fractal.cc
   s2geometry/src/s2/s2furthest_edge_query.cc
   s2geometry/src/s2/s2hausdorff_distance_query.cc
   s2geometry/src/s2/s2latlng.cc
@@ -115,10 +113,11 @@ add_library(
   s2geometry/src/s2/s2predicates.cc
   s2geometry/src/s2/s2projections.cc
   s2geometry/src/s2/s2r2rect.cc
-  s2geometry/src/s2/s2region.cc
-  s2geometry/src/s2/s2region_term_indexer.cc
+  s2geometry/src/s2/s2random.cc
   s2geometry/src/s2/s2region_coverer.cc
   s2geometry/src/s2/s2region_intersection.cc
+  s2geometry/src/s2/s2region_sharder.cc
+  s2geometry/src/s2/s2region_term_indexer.cc
   s2geometry/src/s2/s2region_union.cc
   s2geometry/src/s2/s2shape_index.cc
   s2geometry/src/s2/s2shape_index_buffered_region.cc
@@ -131,10 +130,15 @@ add_library(
   s2geometry/src/s2/s2shapeutil_conversion.cc
   s2geometry/src/s2/s2shapeutil_edge_iterator.cc
   s2geometry/src/s2/s2shapeutil_get_reference_point.cc
+  s2geometry/src/s2/s2shapeutil_count_vertices.cc
+  s2geometry/src/s2/s2shapeutil_edge_wrap.cc
   s2geometry/src/s2/s2shapeutil_visit_crossing_edge_pairs.cc
   s2geometry/src/s2/s2text_format.cc
   s2geometry/src/s2/s2wedge_relations.cc
   s2geometry/src/s2/s2winding_operation.cc
+  s2geometry/src/s2/internal/s2index_cell_data.cc
+  s2geometry/src/s2/internal/s2incident_edge_tracker.cc
+  s2geometry/src/s2/base/malloc_extension.cc
   s2geometry/src/s2/util/bits/bit-interleave.cc
   s2geometry/src/s2/util/coding/coder.cc
   s2geometry/src/s2/util/coding/varint.cc
@@ -157,6 +161,14 @@ endif()
 # namespace any of their symbols, and neither does libfsst. Both of them define
 # an "Encoder" :facepalm:. This seems to work.
 target_compile_definitions(s2 PUBLIC Encoder=S2Encoder)
+
+# Recent Abseil releases fail to compile the S2 stack with GCC when UBSan is
+# enabled (constant evaluation rejects Abseil's sanitizer instrumentation).
+# Keep DuckDB's other Debug sanitizers enabled and disable UBSan only here.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(s2 PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_definitions(s2 PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+endif()
 
 target_include_directories(
   s2 PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/s2geometry/src>)
@@ -191,12 +203,31 @@ target_link_libraries(
 # Build s2geography
 add_library(s2::s2 ALIAS s2)
 set(S2_VERSION_MAJOR 0)
-set(S2_VERSION_MINOR 11)
+set(S2_VERSION_MINOR 13)
 set(S2_VERSION_PATCH 1)
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(s2geography)
 target_compile_definitions(
   s2geography PRIVATE -DGEOARROW_FAST_FLOAT_NAMESPACE=duckdb_fast_float)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(
+    s2geography PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_options(
+    s2geography_c PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_definitions(
+    s2geography PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+  target_compile_definitions(
+    s2geography_c PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+endif()
+
+# Keep the extension's GeoArrow and nanoarrow symbols separate from the vendored
+# copies used internally by s2geography. In particular, s2geography must be
+# configured before these targets exist or it will link against their differently
+# namespaced ABI instead of compiling its own implementation.
+set(NANOARROW_NAMESPACE DuckDBGeography)
+set(GEOARROW_NAMESPACE DuckDBGeography)
+FetchContent_MakeAvailable(nanoarrow)
+FetchContent_MakeAvailable(geoarrow)
 
 set(EXTENSION_NAME ${TARGET_NAME}_extension)
 set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
@@ -216,6 +247,7 @@ set(EXTENSION_SOURCES
     src/s2_accessors.cpp
     src/s2_bounds.cpp
     src/s2_geoarrow.cpp)
+list(APPEND EXTENSION_SOURCES src/s2_geography2_ops.cpp)
 
 # Workaround for difference between v1.1.3 and main with respect to
 # FunctionEntry fields
@@ -226,9 +258,22 @@ endif()
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(
+    ${EXTENSION_NAME} PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_options(
+    ${LOADABLE_EXTENSION_NAME}
+    PRIVATE $<$<CONFIG:Debug>:-fno-sanitize=undefined>)
+  target_compile_definitions(
+    ${EXTENSION_NAME} PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+  target_compile_definitions(
+    ${LOADABLE_EXTENSION_NAME} PRIVATE $<$<CONFIG:Debug>:NDEBUG_SANITIZER>)
+endif()
+
 # Link OpenSSL in both the static library as the loadable extension
 target_link_libraries(
   ${EXTENSION_NAME}
+  s2geography_c
   s2geography
   s2
   OpenSSL::SSL
@@ -238,6 +283,7 @@ target_link_libraries(
   nanoarrow::nanoarrow)
 target_link_libraries(
   ${LOADABLE_EXTENSION_NAME}
+  s2geography_c
   s2geography
   s2
   OpenSSL::SSL
@@ -247,7 +293,7 @@ target_link_libraries(
   nanoarrow::nanoarrow)
 
 install(
-  TARGETS ${EXTENSION_NAME} s2geography s2
+  TARGETS ${EXTENSION_NAME} s2geography_c s2geography s2
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

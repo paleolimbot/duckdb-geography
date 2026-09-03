@@ -1,0 +1,83 @@
+# name: test/sql/geography/geography2.test
+# description: test the WKB-backed GEOGRAPHY2 type and C API operations
+# group: [geography]
+
+require geography
+
+# WKT roundtrip mirrors functions_io.test
+query I
+SELECT s2_astext('POINT (-64 45)'::GEOGRAPHY2)
+----
+POINT (-64 45)
+
+query I
+SELECT s2_astext(s2_geogfromtext2('POINT (-64 45)'))
+----
+POINT (-64 45)
+
+# WKB parse mirrors functions_io.test
+query I
+SELECT s2_astext(s2_geogfromwkb2('\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3e\x40\x00\x00\x00\x00\x00\x00\x24\x40'))
+----
+POINT (29.999999999999996 10)
+
+# WKB is the native storage representation
+query I
+SELECT s2_astext(s2_geogfromwkb2(s2_aswkb('POINT (-64 45)'::GEOGRAPHY2)))
+----
+POINT (-64 45)
+
+# Predicate cases mirror binary_index_ops.test
+query I
+SELECT s2_intersects(
+  'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))'::GEOGRAPHY2,
+  'POINT (5 5)'::GEOGRAPHY2
+)
+----
+true
+
+query I
+SELECT s2_contains(
+  'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))'::GEOGRAPHY2,
+  'POINT (5 5)'::GEOGRAPHY2
+)
+----
+true
+
+query I
+SELECT s2_within(
+  'POINT (5 5)'::GEOGRAPHY2,
+  'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))'::GEOGRAPHY2
+)
+----
+true
+
+query I
+SELECT s2_equals('POINT (5 5)'::GEOGRAPHY2, 'POINT (5 5)'::GEOGRAPHY2)
+----
+true
+
+query I
+SELECT s2_disjoint('POINT (5 5)'::GEOGRAPHY2, 'POINT (20 20)'::GEOGRAPHY2)
+----
+true
+
+query I
+SELECT s2_dwithin(
+  'POINT (0 0)'::GEOGRAPHY2,
+  'POINT (0.001 0)'::GEOGRAPHY2,
+  200
+)
+----
+true
+
+# NULL propagation through the common wrappers
+query I
+SELECT s2_intersects(NULL::GEOGRAPHY2, 'POINT (0 0)'::GEOGRAPHY2)
+----
+NULL
+
+statement error
+SELECT s2_geogfromwkb2('\x01\x02'::BLOB)
+----
+Invalid Input Error: s2geography C API error: Expected uint32 but found end of buffer at byte 1
