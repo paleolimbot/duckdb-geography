@@ -30,6 +30,12 @@ LogicalType Types::GEOGRAPHY() {
   return type;
 }
 
+LogicalType Types::GEOGRAPHY2() {
+  LogicalType type = LogicalType::BLOB;
+  type.SetAlias("GEOGRAPHY2");
+  return type;
+}
+
 LogicalType Types::S2_BOX() {
   LogicalType type = LogicalType::STRUCT({{"xmin", LogicalType::DOUBLE},
                                           {"ymin", LogicalType::DOUBLE},
@@ -44,6 +50,7 @@ void RegisterTypes(ExtensionLoader& loader) {
   loader.RegisterType("S2_CELL_UNION", Types::S2_CELL_UNION());
   loader.RegisterType("S2_CELL_CENTER", Types::S2_CELL_CENTER());
   loader.RegisterType("GEOGRAPHY", Types::GEOGRAPHY());
+  loader.RegisterType("GEOGRAPHY2", Types::GEOGRAPHY2());
   loader.RegisterType("S2_BOX", Types::S2_BOX());
 }
 
