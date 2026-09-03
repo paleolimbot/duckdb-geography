@@ -19,7 +19,7 @@ POINT (-64 45)
 query I
 SELECT s2_astext(s2_geogfromwkb2('\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3e\x40\x00\x00\x00\x00\x00\x00\x24\x40'))
 ----
-POINT (29.999999999999996 10)
+POINT (30 10)
 
 # WKB is the native storage representation
 query I
