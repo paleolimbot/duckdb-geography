@@ -38,7 +38,7 @@ index bd807e2..27aee43 100644
 -  return sign_ * ldexp(static_cast<double>(d_mantissa), bn_exp_);
 +  return sign_ * std::ldexp(static_cast<double>(d_mantissa), bn_exp_);
  }
- 
+
  ExactFloat ExactFloat::RoundToMaxPrec(int max_prec, RoundingMode mode) const {
 @@ -336,7 +336,7 @@ int ExactFloat::NumSignificantDigitsForPrec(int prec) {
    //
@@ -47,5 +47,5 @@ index bd807e2..27aee43 100644
 -  return static_cast<int>(1 + ceil(prec * (M_LN2 / M_LN10)));
 +  return static_cast<int>(1 + std::ceil(prec * (M_LN2 / M_LN10)));
  }
- 
+
  // Numbers are always formatted with at least this many significant digits.

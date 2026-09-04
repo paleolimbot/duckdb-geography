@@ -10,8 +10,10 @@ namespace duckdb_s2 {
 
 // Compile-time check: ensure we're on a little-endian platform
 // DuckDB only officially supports little-endian architectures (x86_64, ARM64)
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__)
 static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
               "duckdb-geography only supports little-endian platforms");
+#endif
 
 // Helper functions for endian-aware data access
 // These replace s2geometry's LittleEndian/BigEndian classes which were removed in v0.12+
