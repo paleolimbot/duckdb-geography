@@ -132,9 +132,9 @@ void GeoArrowRegisterScan(ClientContext& context, TableFunctionInput& data_p,
 }  // namespace
 
 void ImportWKTToWKB(Vector& source, Vector& result, idx_t count) {
-  struct GeoArrowWKTReader reader{};
-  struct GeoArrowWKBWriter writer{};
-  struct GeoArrowError error{};
+  GeoArrowWKTReader reader = {};
+  GeoArrowWKBWriter writer = {};
+  GeoArrowError error = {};
 
   if (GeoArrowWKTReaderInit(&reader) != GEOARROW_OK) {
     throw InvalidInputException("GeoArrow WKT reader initialization failed");
@@ -147,17 +147,16 @@ void ImportWKTToWKB(Vector& source, Vector& result, idx_t count) {
 
   try {
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkt) {
-      struct GeoArrowVisitor visitor{};
+      GeoArrowVisitor visitor = {};
       GeoArrowWKBWriterInitVisitor(&writer, &visitor);
       visitor.error = &error;
 
-      struct GeoArrowStringView wkt_view{wkt.GetData(),
-                                         static_cast<int64_t>(wkt.GetSize())};
+      GeoArrowStringView wkt_view = {wkt.GetData(), static_cast<int64_t>(wkt.GetSize())};
       if (GeoArrowWKTReaderVisit(&reader, wkt_view, &visitor) != GEOARROW_OK) {
         throw InvalidInputException("GeoArrow WKT parse error: %s", error.message);
       }
 
-      struct ArrowArray array{};
+      ArrowArray array = {};
       if (GeoArrowWKBWriterFinish(&writer, &array, &error) != GEOARROW_OK) {
         throw InvalidInputException("GeoArrow WKB export error: %s", error.message);
       }
@@ -180,9 +179,9 @@ void ImportWKTToWKB(Vector& source, Vector& result, idx_t count) {
 }
 
 void ExportWKBToWKT(Vector& source, Vector& result, idx_t count) {
-  struct GeoArrowWKBReader reader{};
-  struct GeoArrowWKTWriter writer{};
-  struct GeoArrowError error{};
+  GeoArrowWKBReader reader = {};
+  GeoArrowWKTWriter writer = {};
+  GeoArrowError error = {};
 
   if (GeoArrowWKBReaderInit(&reader) != GEOARROW_OK) {
     throw InvalidInputException("GeoArrow WKB reader initialization failed");
@@ -195,17 +194,17 @@ void ExportWKBToWKT(Vector& source, Vector& result, idx_t count) {
 
   try {
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkb) {
-      struct GeoArrowVisitor visitor{};
+      GeoArrowVisitor visitor = {};
       GeoArrowWKTWriterInitVisitor(&writer, &visitor);
       visitor.error = &error;
 
-      struct GeoArrowBufferView wkb_view{reinterpret_cast<const uint8_t*>(wkb.GetData()),
-                                         static_cast<int64_t>(wkb.GetSize())};
+      GeoArrowBufferView wkb_view = {reinterpret_cast<const uint8_t*>(wkb.GetData()),
+                                     static_cast<int64_t>(wkb.GetSize())};
       if (GeoArrowWKBReaderVisit(&reader, wkb_view, &visitor) != GEOARROW_OK) {
         throw InvalidInputException("GeoArrow WKB parse error: %s", error.message);
       }
 
-      struct ArrowArray array{};
+      ArrowArray array = {};
       if (GeoArrowWKTWriterFinish(&writer, &array, &error) != GEOARROW_OK) {
         throw InvalidInputException("GeoArrow WKT export error: %s", error.message);
       }
