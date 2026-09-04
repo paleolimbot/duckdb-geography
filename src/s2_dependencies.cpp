@@ -2,7 +2,6 @@
 
 #include <absl/base/config.h>
 #include <openssl/opensslv.h>
-#include <s2geography.h>
 
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "geoarrow/geoarrow.h"

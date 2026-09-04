@@ -1,5 +1,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/database.hpp"
@@ -72,9 +73,6 @@ struct GeoArrowWKB {
 
   static void ArrowToDuck(ClientContext& context, Vector& source, Vector& result,
                           idx_t count) {
-    s2geography::geoarrow::ImportOptions options;
-    options.set_check(false);
-    options.set_oriented(true);
     ImportWKBToGeography(source, result, count);
   }
 
@@ -132,6 +130,101 @@ void GeoArrowRegisterScan(ClientContext& context, TableFunctionInput& data_p,
   data.finished = true;
 }
 }  // namespace
+
+void ImportWKTToWKB(Vector& source, Vector& result, idx_t count) {
+  GeoArrowWKTReader reader = {};
+  GeoArrowWKBWriter writer = {};
+  GeoArrowError error = {};
+
+  if (GeoArrowWKTReaderInit(&reader) != GEOARROW_OK) {
+    throw InvalidInputException("GeoArrow WKT reader initialization failed");
+  }
+
+  if (GeoArrowWKBWriterInit(&writer) != GEOARROW_OK) {
+    GeoArrowWKTReaderReset(&reader);
+    throw InvalidInputException("GeoArrow WKB writer initialization failed");
+  }
+
+  try {
+    UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkt) {
+      GeoArrowVisitor visitor = {};
+      GeoArrowWKBWriterInitVisitor(&writer, &visitor);
+      visitor.error = &error;
+
+      GeoArrowStringView wkt_view = {wkt.GetData(), static_cast<int64_t>(wkt.GetSize())};
+      if (GeoArrowWKTReaderVisit(&reader, wkt_view, &visitor) != GEOARROW_OK) {
+        throw InvalidInputException("GeoArrow WKT parse error: %s", error.message);
+      }
+
+      ArrowArray array = {};
+      if (GeoArrowWKBWriterFinish(&writer, &array, &error) != GEOARROW_OK) {
+        throw InvalidInputException("GeoArrow WKB export error: %s", error.message);
+      }
+
+      const auto offsets = static_cast<const int32_t*>(array.buffers[1]);
+      const auto data = static_cast<const char*>(array.buffers[2]);
+      auto value = StringVector::AddStringOrBlob(result, data + offsets[0],
+                                                 offsets[1] - offsets[0]);
+      array.release(&array);
+      return value;
+    });
+  } catch (...) {
+    GeoArrowWKBWriterReset(&writer);
+    GeoArrowWKTReaderReset(&reader);
+    throw;
+  }
+
+  GeoArrowWKBWriterReset(&writer);
+  GeoArrowWKTReaderReset(&reader);
+}
+
+void ExportWKBToWKT(Vector& source, Vector& result, idx_t count) {
+  GeoArrowWKBReader reader = {};
+  GeoArrowWKTWriter writer = {};
+  GeoArrowError error = {};
+
+  if (GeoArrowWKBReaderInit(&reader) != GEOARROW_OK) {
+    throw InvalidInputException("GeoArrow WKB reader initialization failed");
+  }
+
+  if (GeoArrowWKTWriterInit(&writer) != GEOARROW_OK) {
+    GeoArrowWKBReaderReset(&reader);
+    throw InvalidInputException("GeoArrow WKT writer initialization failed");
+  }
+
+  try {
+    UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkb) {
+      GeoArrowVisitor visitor = {};
+      GeoArrowWKTWriterInitVisitor(&writer, &visitor);
+      visitor.error = &error;
+
+      GeoArrowBufferView wkb_view = {reinterpret_cast<const uint8_t*>(wkb.GetData()),
+                                     static_cast<int64_t>(wkb.GetSize())};
+      if (GeoArrowWKBReaderVisit(&reader, wkb_view, &visitor) != GEOARROW_OK) {
+        throw InvalidInputException("GeoArrow WKB parse error: %s", error.message);
+      }
+
+      ArrowArray array = {};
+      if (GeoArrowWKTWriterFinish(&writer, &array, &error) != GEOARROW_OK) {
+        throw InvalidInputException("GeoArrow WKT export error: %s", error.message);
+      }
+
+      const auto offsets = static_cast<const int32_t*>(array.buffers[1]);
+      const auto data = static_cast<const char*>(array.buffers[2]);
+      auto value =
+          StringVector::AddString(result, data + offsets[0], offsets[1] - offsets[0]);
+      array.release(&array);
+      return value;
+    });
+  } catch (...) {
+    GeoArrowWKTWriterReset(&writer);
+    GeoArrowWKBReaderReset(&reader);
+    throw;
+  }
+
+  GeoArrowWKTWriterReset(&writer);
+  GeoArrowWKBReaderReset(&reader);
+}
 
 void RegisterGeoArrowExtensions(ExtensionLoader& loader) {
   TableFunction register_func("s2_register_geoarrow_extensions", {}, GeoArrowRegisterScan,

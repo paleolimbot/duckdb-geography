@@ -1,0 +1,15 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bc99631..43f3224 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -257,6 +257,10 @@ target_link_libraries(
+     absl::vlog_is_on
+     ${CMAKE_THREAD_LIBS_INIT})
+
++# Avoid a global Encoder symbol collision with DuckDB's vendored libfsst.
++# PUBLIC keeps consumers of S2 headers ABI-compatible with the renamed library.
++target_compile_definitions(s2 PUBLIC Encoder=S2Encoder)
++
+ if (GOOGLETEST_ROOT)
+   target_link_libraries(
+       s2testing

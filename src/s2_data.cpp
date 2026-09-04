@@ -3,7 +3,7 @@
 #include "duckdb/function/table_function.hpp"
 
 #include <absl/base/config.h>
-#include <s2geography.h>
+#include <s2geography/wkt-reader.h>
 
 #include "s2_data_static.hpp"
 #include "s2_geography_serde.hpp"

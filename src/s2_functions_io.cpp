@@ -385,14 +385,12 @@ LIMIT 5;
   }
 };
 
-void ImportWKBToGeography(Vector& source, Vector& result, idx_t count,
-                          const s2geography::geoarrow::ImportOptions& options) {
-  S2GeogFromWKB::Execute(source, result, count, options);
+void ImportWKBToGeography(Vector& source, Vector& result, idx_t count) {
+  S2GeogFromWKB::Execute(source, result, count, s2geography::geoarrow::ImportOptions());
 }
 
-void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count,
-                          const s2geography::geoarrow::ExportOptions& options) {
-  S2AsWKB::Execute(source, result, count, options);
+void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count) {
+  S2AsWKB::Execute(source, result, count, s2geography::geoarrow::ExportOptions());
 }
 
 void RegisterS2GeographyFunctionsIO(ExtensionLoader& loader) {
