@@ -141,14 +141,17 @@ static bool CastFromText(Vector& source, Vector& result, idx_t count, CastParame
 
 void RegisterUnary(ExtensionLoader& loader, const char* name, LogicalType input,
                    LogicalType output, scalar_function_t fn) {
-  loader.RegisterFunction(
-      ScalarFunction(name, {std::move(input)}, std::move(output), fn));
+  ScalarFunction function(name, {std::move(input)}, std::move(output), fn);
+  function.SetFallible();
+  loader.RegisterFunction(function);
 }
 
 void RegisterBinaryPredicate(ExtensionLoader& loader, const char* name,
                              scalar_function_t fn) {
-  loader.RegisterFunction(ScalarFunction(name, {Types::GEOGRAPHY2(), Types::GEOGRAPHY2()},
-                                         LogicalType::BOOLEAN, fn));
+  ScalarFunction function(name, {Types::GEOGRAPHY2(), Types::GEOGRAPHY2()},
+                          LogicalType::BOOLEAN, fn);
+  function.SetFallible();
+  loader.RegisterFunction(function);
 }
 
 }  // namespace
@@ -169,9 +172,11 @@ void RegisterS2Geography2Ops(ExtensionLoader& loader) {
   RegisterBinaryPredicate(loader, "s2_equals", BinaryPredicate<S2GEOGRAPHY_OP_EQUALS>);
   RegisterBinaryPredicate(loader, "s2_disjoint",
                           BinaryPredicate<S2GEOGRAPHY_OP_DISJOINT>);
-  loader.RegisterFunction(ScalarFunction(
-      "s2_dwithin", {Types::GEOGRAPHY2(), Types::GEOGRAPHY2(), LogicalType::DOUBLE},
-      LogicalType::BOOLEAN, DWithin));
+  ScalarFunction dwithin("s2_dwithin",
+                         {Types::GEOGRAPHY2(), Types::GEOGRAPHY2(), LogicalType::DOUBLE},
+                         LogicalType::BOOLEAN, DWithin);
+  dwithin.SetFallible();
+  loader.RegisterFunction(dwithin);
 
   loader.RegisterCastFunction(LogicalType::VARCHAR, Types::GEOGRAPHY2(),
                               BoundCastInfo(CastFromText), 1);

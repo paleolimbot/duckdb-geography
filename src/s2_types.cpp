@@ -32,7 +32,7 @@ LogicalType Types::GEOGRAPHY() {
 
 LogicalType Types::GEOGRAPHY2() {
   LogicalType type = LogicalType::BLOB;
-  type.SetAlias("GEOGRAPHY2");
+  type = type.WithAlias("GEOGRAPHY2");
   return type;
 }
 
