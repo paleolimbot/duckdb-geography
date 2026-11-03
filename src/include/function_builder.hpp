@@ -22,7 +22,7 @@ class ScalarFunctionVariantBuilder {
  private:
   // DuckDB 2.0 turns an exception from a function that is not marked fallible
   // into an internal error. Most of these functions can throw on invalid input
-  // (unparseable WKT/WKB, invalid cells, unknown names), so mark them all.
+  // (unparsable WKT/WKB, invalid cells, unknown names), so mark them all.
   explicit ScalarFunctionVariantBuilder()
       : function({}, LogicalTypeId::INVALID, nullptr) {
     function.SetFallible();
