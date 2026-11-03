@@ -1,4 +1,5 @@
 
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/main/database.hpp"
 
 #include "s2/s2cell.h"
@@ -104,7 +105,9 @@ struct S2CellUnionFromStorage {
     vector<S2CellId> cell_ids;
     // Not sure if this is the appropriate way to handle list child data
     // in the presence of a possible dictionary vector as a source
-    auto child_ids = reinterpret_cast<uint64_t*>(ListVector::GetEntry(source).GetData());
+    // Untyped on purpose: the child may be UBIGINT or BIGINT (same layout).
+    auto child_ids = reinterpret_cast<const uint64_t*>(
+        FlatVector::GetData(ListVector::GetEntry(source)));
 
     uint64_t offset = 0;
 
@@ -143,7 +146,9 @@ struct S2CellUnionToGeography {
     vector<S2CellId> cell_ids;
     // Not sure if this is the appropriate way to handle list child data
     // in the presence of a possible dictionary vector as a source
-    auto child_ids = reinterpret_cast<uint64_t*>(ListVector::GetEntry(source).GetData());
+    // Untyped on purpose: the child may be UBIGINT or BIGINT (same layout).
+    auto child_ids = reinterpret_cast<const uint64_t*>(
+        FlatVector::GetData(ListVector::GetEntry(source)));
 
     UnaryExecutor::Execute<list_entry_t, string_t>(
         source, result, count, [&](list_entry_t item) {

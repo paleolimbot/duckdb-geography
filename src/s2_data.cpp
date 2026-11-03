@@ -25,7 +25,7 @@ class S2DataFunctionData : public TableFunctionData {
 
 static inline duckdb::unique_ptr<FunctionData> S2DataCitiesBind(
     ClientContext& context, TableFunctionBindInput& input,
-    vector<LogicalType>& return_types, vector<string>& names) {
+    vector<LogicalType>& return_types, vector<Identifier>& names) {
   names.push_back("name");
   names.push_back("population");
   names.push_back("geog");
@@ -59,7 +59,7 @@ void S2DataCitiesScan(ClientContext& context, TableFunctionInput& data_p,
   // There seems to be some issue with constructing a Value from
   // invalid unicode (i.e., a blob), and it's unclear if SetValue()
   // will automatically call AddString(). So, we do this manually.
-  auto geogs_data = reinterpret_cast<string_t*>(geogs.GetData());
+  auto geogs_data = FlatVector::GetDataMutable<string_t>(geogs);
 
   for (idx_t i = start; i < end; i++) {
     const City& city = kCities[i];
@@ -77,7 +77,7 @@ void S2DataCitiesScan(ClientContext& context, TableFunctionInput& data_p,
 
 static inline duckdb::unique_ptr<FunctionData> S2DataCountriesBind(
     ClientContext& context, TableFunctionBindInput& input,
-    vector<LogicalType>& return_types, vector<string>& names) {
+    vector<LogicalType>& return_types, vector<Identifier>& names) {
   names.push_back("name");
   names.push_back("continent");
   names.push_back("geog");
@@ -111,7 +111,7 @@ void S2DataCountriesScan(ClientContext& context, TableFunctionInput& data_p,
   // There seems to be some issue with constructing a Value from
   // invalid unicode (i.e., a blob), and it's unclear if SetValue()
   // will automatically call AddString(). So, we do this manually.
-  auto geogs_data = reinterpret_cast<string_t*>(geogs.GetData());
+  auto geogs_data = FlatVector::GetDataMutable<string_t>(geogs);
 
   for (idx_t i = start; i < end; i++) {
     const Country& country = kCountries[i];

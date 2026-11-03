@@ -2,6 +2,7 @@
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
 #include "geoarrow/geoarrow.hpp"
@@ -78,7 +79,7 @@ struct GeoArrowWKB {
     ImportWKBToGeography(source, result, count);
   }
 
-  static void DuckToArrow(ClientContext& context, Vector& source, Vector& result,
+  static void DuckToArrow(ClientContext& context, const Vector& source, Vector& result,
                           idx_t count) {
     ExportGeographyToWKB(source, result, count);
   }
@@ -101,7 +102,7 @@ class GeoArrowRegisterFunctionData final : public TableFunctionData {
 unique_ptr<FunctionData> GeoArrowRegisterBind(ClientContext& context,
                                               TableFunctionBindInput& input,
                                               vector<LogicalType>& return_types,
-                                              vector<string>& names) {
+                                              vector<Identifier>& names) {
   names.push_back("registered");
   return_types.push_back(LogicalType::BOOLEAN);
   return make_uniq<GeoArrowRegisterFunctionData>();

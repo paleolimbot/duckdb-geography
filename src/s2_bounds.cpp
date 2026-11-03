@@ -1,5 +1,6 @@
 
 
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -242,11 +243,13 @@ struct S2BoundsRectAgg {
     }
   };
 
-  static idx_t StateSize(const AggregateFunction&) { return sizeof(State); }
+  static idx_t StateSize(AggregateStateInput&) { return sizeof(State); }
 
-  static void Initialize(const AggregateFunction&, data_ptr_t state_mem) {
-    const auto state_ptr = new (state_mem) State();
-    state_ptr->Init();
+  static void Initialize(AggregateStateInput&, data_ptr_t* states, idx_t count) {
+    for (idx_t i = 0; i < count; i++) {
+      const auto state_ptr = new (states[i]) State();
+      state_ptr->Init();
+    }
   }
 
   static void Update(Vector inputs[], AggregateInputData&, idx_t, Vector& state_vec,
@@ -277,28 +280,6 @@ struct S2BoundsRectAgg {
     }
   }
 
-  static void SimpleUpdate(Vector inputs[], AggregateInputData& aggr_input_data,
-                           idx_t input_count, data_ptr_t state_ptr, idx_t count) {
-    auto& input_vec = inputs[0];
-    UnifiedVectorFormat input_format;
-    input_vec.ToUnifiedFormat(count, input_format);
-
-    const auto input_ptr = UnifiedVectorFormat::GetData<string_t>(input_format);
-    auto& state = *reinterpret_cast<State*>(state_ptr);
-
-    for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
-      const auto input_idx = input_format.sel->get_index(raw_idx);
-
-      if (!input_format.validity.RowIsValid(input_idx)) {
-        continue;
-      }
-
-      auto& input = input_ptr[input_idx];
-
-      state.Update(input);
-    }
-  }
-
   static void Combine(Vector& source, Vector& target, AggregateInputData& aggr_input_data,
                       idx_t count) {
     UnifiedVectorFormat source_format;
@@ -315,17 +296,17 @@ struct S2BoundsRectAgg {
     }
   }
 
-  static void Finalize(Vector& state_vec, AggregateInputData& aggr_input_data,
+  static void Finalize(Vector& state_vec, AggregateFinalizeInputData& aggr_input_data,
                        Vector& result, idx_t count, idx_t offset) {
     UnifiedVectorFormat state_format;
     state_vec.ToUnifiedFormat(count, state_format);
     const auto state_ptr = UnifiedVectorFormat::GetData<State*>(state_format);
 
     auto& struct_vec = StructVector::GetEntries(result);
-    const auto min_x_data = FlatVector::GetData<double>(*struct_vec[0]);
-    const auto min_y_data = FlatVector::GetData<double>(*struct_vec[1]);
-    const auto max_x_data = FlatVector::GetData<double>(*struct_vec[2]);
-    const auto max_y_data = FlatVector::GetData<double>(*struct_vec[3]);
+    const auto min_x_data = FlatVector::GetDataMutable<double>(struct_vec[0]);
+    const auto min_y_data = FlatVector::GetDataMutable<double>(struct_vec[1]);
+    const auto max_x_data = FlatVector::GetDataMutable<double>(struct_vec[2]);
+    const auto max_y_data = FlatVector::GetDataMutable<double>(struct_vec[3]);
 
     for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
       const auto& state = *state_ptr[state_format.sel->get_index(raw_idx)];
@@ -343,7 +324,8 @@ struct S2BoundsRectAgg {
   static void Register(ExtensionLoader& loader) {
     AggregateFunction function("s2_bounds_box_agg", {Types::GEOGRAPHY()}, Types::S2_BOX(),
                                StateSize, Initialize, Update, Combine, Finalize,
-                               SimpleUpdate);
+                               FunctionNullHandling::DEFAULT_NULL_HANDLING);
+    function.SetFallible();
     loader.RegisterFunction(function);
   }
 };
@@ -482,7 +464,7 @@ SELECT s2_box_struct(s2_bounds_box('POINT (0 1)'::GEOGRAPHY)) as rect;
     auto& struct_vec_src = StructVector::GetEntries(args.data[0]);
     auto& struct_vec_dst = StructVector::GetEntries(result);
     for (int i = 0; i < 4; i++) {
-      struct_vec_dst[i]->Reference(*struct_vec_src[i]);
+      struct_vec_dst[i].Reference(struct_vec_src[i]);
     }
 
     if (args.size() == 1) {
@@ -541,10 +523,10 @@ SELECT s2_box(177.285, -18.288, 177.285, -16.0209) as box;
     auto& xmax_child = children[2];
     auto& ymax_child = children[3];
 
-    xmin_child->Reference(xmin);
-    ymin_child->Reference(ymin);
-    xmax_child->Reference(xmax);
-    ymax_child->Reference(ymax);
+    xmin_child.Reference(xmin);
+    ymin_child.Reference(ymin);
+    xmax_child.Reference(xmax);
+    ymax_child.Reference(ymax);
 
     if (count == 1) {
       result.SetVectorType(VectorType::CONSTANT_VECTOR);

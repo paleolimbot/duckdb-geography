@@ -88,7 +88,7 @@ SELECT s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)');
     return true;
   }
 
-  static inline void Execute(Vector& source, Vector& result, idx_t count,
+  static inline void Execute(const Vector& source, Vector& result, idx_t count,
                              const s2geography::geoarrow::ImportOptions& options =
                                  s2geography::geoarrow::ImportOptions()) {
     GeographyEncoder encoder;
@@ -177,7 +177,7 @@ SELECT s2_format(s2_data_city('Vancouver'), 1);
     return true;
   }
 
-  static inline void Execute(Vector& source, Vector& result, idx_t count,
+  static inline void Execute(const Vector& source, Vector& result, idx_t count,
                              int8_t precision = -1) {
     GeographyDecoder decoder;
     s2geography::WKTWriter writer(precision);
@@ -259,7 +259,7 @@ SELECT s2_geogfromwkb_novalidate(
     Execute(args.data[0], result, args.size(), options);
   }
 
-  static inline void Execute(Vector& source, Vector& result, idx_t count,
+  static inline void Execute(const Vector& source, Vector& result, idx_t count,
                              const s2geography::geoarrow::ImportOptions& options =
                                  s2geography::geoarrow::ImportOptions()) {
     s2geography::WKBReader reader(options);
@@ -305,7 +305,7 @@ SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
     Execute(args.data[0], result, args.size());
   }
 
-  static inline void Execute(Vector& source, Vector& result, idx_t count,
+  static inline void Execute(const Vector& source, Vector& result, idx_t count,
                              const s2geography::geoarrow::ExportOptions& options =
                                  s2geography::geoarrow::ExportOptions()) {
     GeographyDecoder decoder;
@@ -390,7 +390,7 @@ void ImportWKBToGeography(Vector& source, Vector& result, idx_t count,
   S2GeogFromWKB::Execute(source, result, count, options);
 }
 
-void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count,
+void ExportGeographyToWKB(const Vector& source, Vector& result, idx_t count,
                           const s2geography::geoarrow::ExportOptions& options) {
   S2AsWKB::Execute(source, result, count, options);
 }

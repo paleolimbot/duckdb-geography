@@ -1,4 +1,5 @@
 #include "function_builder.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/function_entry.hpp"
 
 namespace duckdb {
@@ -13,9 +14,9 @@ void FunctionBuilder::Register(ExtensionLoader& loader, const char* name,
   // Also add the parameter names. We need to access the catalog entry for this.
   auto& catalog = Catalog::GetSystemCatalog(db);
   auto transaction = CatalogTransaction::GetSystemTransaction(db);
-  auto& schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
+  auto& schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
   auto catalog_entry =
-      schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, name);
+      schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier(name));
   if (!catalog_entry) {
     // This should not happen, we just registered the function
     throw InternalException(

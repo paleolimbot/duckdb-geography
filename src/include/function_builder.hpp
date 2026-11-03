@@ -20,8 +20,13 @@ class ScalarFunctionVariantBuilder {
   void SetFunction(scalar_function_t fn);
 
  private:
+  // DuckDB 2.0 turns an exception from a function that is not marked fallible
+  // into an internal error. Most of these functions can throw on invalid input
+  // (unparseable WKT/WKB, invalid cells, unknown names), so mark them all.
   explicit ScalarFunctionVariantBuilder()
-      : function({}, LogicalTypeId::INVALID, nullptr) {}
+      : function({}, LogicalTypeId::INVALID, nullptr) {
+    function.SetFallible();
+  }
 
   ScalarFunction function;
 
@@ -30,16 +35,16 @@ class ScalarFunctionVariantBuilder {
 
 inline void ScalarFunctionVariantBuilder::AddParameter(const char* name,
                                                        LogicalType type) {
-  function.arguments.emplace_back(std::move(type));
+  function.GetSignature().AddParameter(Identifier(name), type);
   parameter_names.emplace_back(name);
 }
 
 inline void ScalarFunctionVariantBuilder::SetReturnType(LogicalType type) {
-  function.return_type = std::move(type);
+  function.SetReturnType(std::move(type));
 }
 
 inline void ScalarFunctionVariantBuilder::SetFunction(scalar_function_t fn) {
-  function.function = fn;
+  function.SetFunctionCallback(fn);
 }
 
 //------------------------------------------------------------------------------
@@ -84,7 +89,7 @@ void ScalarFunctionBuilder::AddVariant(CALLBACK&& callback) {
   callback(builder);
 
   // A return type is required
-  if (builder.function.return_type.id() == LogicalTypeId::INVALID) {
+  if (builder.function.GetReturnType().id() == LogicalTypeId::INVALID) {
     throw InternalException("Return type not set in ScalarFunctionBuilder::AddVariant");
   }
 

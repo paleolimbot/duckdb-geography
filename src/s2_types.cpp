@@ -8,25 +8,25 @@ namespace duckdb {
 namespace duckdb_s2 {
 LogicalType Types::S2_CELL() {
   LogicalType type = LogicalType::UBIGINT;
-  type.SetAlias("S2_CELL");
+  type = type.WithAlias("S2_CELL");
   return type;
 }
 
 LogicalType Types::S2_CELL_UNION() {
   LogicalType type = LogicalType::LIST(S2_CELL());
-  type.SetAlias("S2_CELL_UNION");
+  type = type.WithAlias("S2_CELL_UNION");
   return type;
 }
 
 LogicalType Types::S2_CELL_CENTER() {
   LogicalType type = LogicalType::UBIGINT;
-  type.SetAlias("S2_CELL_CENTER");
+  type = type.WithAlias("S2_CELL_CENTER");
   return type;
 }
 
 LogicalType Types::GEOGRAPHY() {
   LogicalType type = LogicalType::BLOB;
-  type.SetAlias("GEOGRAPHY");
+  type = type.WithAlias("GEOGRAPHY");
   return type;
 }
 
@@ -35,7 +35,7 @@ LogicalType Types::S2_BOX() {
                                           {"ymin", LogicalType::DOUBLE},
                                           {"xmax", LogicalType::DOUBLE},
                                           {"ymax", LogicalType::DOUBLE}});
-  type.SetAlias("S2_BOX");
+  type = type.WithAlias("S2_BOX");
   return type;
 }
 

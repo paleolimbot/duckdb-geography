@@ -12,7 +12,7 @@ void ImportWKBToGeography(Vector& source, Vector& result, idx_t count,
                           const s2geography::geoarrow::ImportOptions& options =
                               s2geography::geoarrow::ImportOptions());
 
-void ExportGeographyToWKB(Vector& source, Vector& result, idx_t count,
+void ExportGeographyToWKB(const Vector& source, Vector& result, idx_t count,
                           const s2geography::geoarrow::ExportOptions& options =
                               s2geography::geoarrow::ExportOptions());
 

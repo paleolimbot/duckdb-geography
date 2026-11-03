@@ -21,7 +21,7 @@ class S2DependenciesFunctionData : public TableFunctionData {
 
 static inline duckdb::unique_ptr<FunctionData> S2DependenciesBind(
     ClientContext& context, TableFunctionBindInput& input,
-    vector<LogicalType>& return_types, vector<string>& names) {
+    vector<LogicalType>& return_types, vector<Identifier>& names) {
   names.push_back("dependency");
   names.push_back("version");
   return_types.push_back(LogicalType::VARCHAR);
