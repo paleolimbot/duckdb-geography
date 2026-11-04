@@ -5,7 +5,6 @@ import pytest
 import duckdb
 import warnings
 
-
 HERE = Path(__file__).parent
 
 

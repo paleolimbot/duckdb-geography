@@ -10,7 +10,3 @@
 	path = s2geography
 	url = https://github.com/paleolimbot/s2geography.git
 	branch = main
-[submodule "s2geometry"]
-	path = s2geometry
-	url = https://github.com/google/s2geometry.git
-	branch = main
