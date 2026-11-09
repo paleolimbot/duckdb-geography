@@ -139,11 +139,12 @@ SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)
           }
 
           auto geog = decoder.Decode(geog_str);
-          error.Clear();
+          error = S2Error();  // Reset error state
           if (!s2geography::s2_find_validation_error(*geog, &error)) {
             return string_t{""};
           } else {
-            return StringVector::AddString(result, error.text());
+            auto msg = error.message();
+            return StringVector::AddString(result, msg.data(), msg.size());
           }
         });
   }
