@@ -86,7 +86,7 @@ con.sql("SELECT 'POINT (-64 45)'::GEOGRAPHY")
 #> │ CAST('POINT (-64 45)' AS GEOGRAPHY) │
 #> │              geography              │
 #> ├─────────────────────────────────────┤
-#> │ POINT (-64 44.99999999999999)       │
+#> │ POINT (-64 45)                      │
 #> └─────────────────────────────────────┘
 ```
 
@@ -100,10 +100,9 @@ The geography extension defines the following types:
   sphere. This is exactly the same as the definition of coordinates and edges in
   [BigQuery Geography](https://cloud.google.com/bigquery/docs/geospatial-data#coordinate_systems_and_edges).
 
-  The underlying representation of the `GEOGRAPHY` type is a `BLOB`. The exact
-  packing of bytes in this blob is not currently guaranteed but is intended to
-  be documented when stable such that other libraries can decode the value
-  independently.
+  The underlying representation of the `GEOGRAPHY` type is a `BLOB` containing
+  standard well-known binary (WKB). This is a breaking change from extension
+  versions that stored an S2-specific tagged serialization.
 
 - `S2_CELL`: A cell in [S2's cell indexing system](http://s2geometry.io/devguide/s2cell_hierarchy).
   Briefly, this is a way to encode every ~2cm square on earth with an unsigned 64-bit

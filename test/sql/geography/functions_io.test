@@ -45,8 +45,14 @@ SELECT ('POINT (30 10)'::GEOGRAPHY).s2_prepare().s2_format(6);
 ----
 POINT (30 10)
 
-# Prepare of bigger geographies should trigger an index
+# Prepare is retained as a compatibility no-op for WKB-backed geographies
 query I
-SELECT ('LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4)'::GEOGRAPHY).s2_prepare();
+SELECT ('LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4)'::GEOGRAPHY).s2_prepare().s2_format(6);
 ----
-<S2ShapeIndex 128 b>
+LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4)
+
+# Importing and exporting WKB preserves its native bytes
+query I
+SELECT s2_aswkb(s2_geogfromwkb(from_hex('0101000000000000000000F03F0000000000000040'))) = from_hex('0101000000000000000000F03F0000000000000040');
+----
+true

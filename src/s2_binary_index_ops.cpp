@@ -130,6 +130,47 @@ SELECT s2_contains(s2_data_country('Canada'), s2_data_city('Chicago'));
           func.SetTag("category", "predicates");
         });
 
+    FunctionBuilder::RegisterScalar(loader, "s2_within", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog1", Types::GEOGRAPHY());
+        variant.AddParameter("geog2", Types::GEOGRAPHY());
+        variant.SetReturnType(LogicalType::BOOLEAN);
+        variant.SetFunction(ExecuteWithinFn);
+      });
+
+      func.SetDescription(R"(
+Returns true if the first geography is within the second.
+)");
+
+      func.SetExample(R"(
+SELECT s2_within(s2_data_city('Toronto'), s2_data_country('Canada'));
+)");
+
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "predicates");
+    });
+
+    FunctionBuilder::RegisterScalar(
+        loader, "s2_disjoint", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog1", Types::GEOGRAPHY());
+            variant.AddParameter("geog2", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::BOOLEAN);
+            variant.SetFunction(ExecuteDisjointFn);
+          });
+
+          func.SetDescription(R"(
+Returns true if the two geographies do not intersect.
+)");
+
+          func.SetExample(R"(
+SELECT s2_disjoint(s2_data_city('Toronto'), s2_data_city('Vancouver'));
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "predicates");
+        });
+
     FunctionBuilder::RegisterScalar(loader, "s2_equals", [](ScalarFunctionBuilder& func) {
       func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
         variant.AddParameter("geog1", Types::GEOGRAPHY());
@@ -260,6 +301,47 @@ SELECT s2_union(
               std::move(lhs), std::move(rhs),
               [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
                 return S2BooleanOperation::Contains(lhs_index, rhs_index, options);
+              });
+        });
+  }
+
+  static void ExecuteWithinFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    S2BooleanOperation::Options options;
+    InitBooleanOperationOptions(&options);
+
+    return ExecutePredicateFn(
+        args, state, result, [&options](UniqueGeography lhs, UniqueGeography rhs) {
+          return DispatchShapeIndexOp(
+              std::move(lhs), std::move(rhs),
+              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
+                return S2BooleanOperation::Contains(rhs_index, lhs_index, options);
+              });
+        });
+  }
+
+  static void ExecuteDisjointFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    GeographyDecoder lhs_decoder;
+    GeographyDecoder rhs_decoder;
+    std::vector<S2CellId> intersection;
+    S2BooleanOperation::Options options;
+    InitBooleanOperationOptions(&options);
+
+    BinaryExecutor::Execute<string_t, string_t, bool>(
+        args.data[0], args.data[1], result, args.size(),
+        [&](string_t lhs_str, string_t rhs_str) {
+          lhs_decoder.DecodeTagAndCovering(lhs_str);
+          rhs_decoder.DecodeTagAndCovering(rhs_str);
+
+          if ((lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) ||
+              (rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) ||
+              !CoveringMayIntersect(lhs_decoder, rhs_decoder, &intersection)) {
+            return true;
+          }
+
+          return !DispatchShapeIndexOp(
+              lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str),
+              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
+                return S2BooleanOperation::Intersects(lhs_index, rhs_index, options);
               });
         });
   }

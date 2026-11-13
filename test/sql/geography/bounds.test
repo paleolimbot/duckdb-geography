@@ -48,7 +48,7 @@ SELECT s2_cellfromlonlat(-64, 45).s2_bounds_box();
 query I
 SELECT s2_bounds_box('MULTIPOINT (0 1, 2 3)'::GEOGRAPHY);
 ----
-{'xmin': 0.0, 'ymin': 1.0, 'xmax': 1.9999999999999996, 'ymax': 3.0000000000000004}
+{'xmin': 0.0, 'ymin': 1.0, 'xmax': 1.9999999999999993, 'ymax': 3.0000000000000004}
 
 # s2_bounds_box_agg()
 
@@ -68,7 +68,7 @@ SELECT s2_bounds_box_agg(s2_cellfromlonlat(-64, 45));
 query I
 SELECT s2_bounds_box_agg('MULTIPOINT (0 1, 2 3)'::GEOGRAPHY);
 ----
-{'xmin': 0.0, 'ymin': 1.0, 'xmax': 1.9999999999999996, 'ymax': 3.0000000000000004}
+{'xmin': 0.0, 'ymin': 1.0, 'xmax': 1.9999999999999993, 'ymax': 3.0000000000000004}
 
 # With some actual aggregation
 query I

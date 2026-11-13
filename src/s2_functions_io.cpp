@@ -113,10 +113,6 @@ struct S2AsText {
       func.SetDescription(R"(
 Returns the well-known text (WKT) string of the geography.
 
-Note that because the internal representation of the GEOGRAPHY type is either
-an S2_CELL_CENTER or a unit vector, WKT typically does not roundtrip through a
-GEOGRAPHY unless the output is rounded using `[s2_format()`][#s2_format].
-
 The output contains spherical edges. If edges are large and the consumer does
 not know that the edges are spherical, this may cause issues.
 
@@ -263,12 +259,10 @@ SELECT s2_geogfromwkb_novalidate(
                              const s2geography::geoarrow::ImportOptions& options =
                                  s2geography::geoarrow::ImportOptions()) {
     s2geography::WKBReader reader(options);
-    GeographyEncoder encoder;
 
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkb) {
-      std::unique_ptr<s2geography::Geography> geog =
-          reader.ReadFeature(std::string_view(wkb.GetData(), wkb.GetSize()));
-      return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
+      reader.ReadFeature(std::string_view(wkb.GetData(), wkb.GetSize()));
+      return StringVector::AddStringOrBlob(result, wkb);
     });
   }
 };
@@ -285,9 +279,8 @@ struct S2AsWKB {
       func.SetDescription(R"(
 Serialize a GEOGRAPHY as well-known binary (WKB).
 
-Note that because the internal representation of the GEOGRAPHY type is either
-an S2_CELL_CENTER or a unit vector, WKB typically does not roundtrip through a
-GEOGRAPHY.
+GEOGRAPHY uses WKB as its native representation, so this operation returns the
+underlying bytes unchanged.
 
 The output contains spherical edges. If edges are large and the consumer does
 not know that the edges are spherical, this may cause issues.
@@ -308,12 +301,10 @@ SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
   static inline void Execute(const Vector& source, Vector& result, idx_t count,
                              const s2geography::geoarrow::ExportOptions& options =
                                  s2geography::geoarrow::ExportOptions()) {
-    GeographyDecoder decoder;
-    s2geography::WKBWriter writer;
+    (void)options;
 
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkb) {
-      std::unique_ptr<s2geography::Geography> geog = decoder.Decode(wkb);
-      return StringVector::AddStringOrBlob(result, writer.WriteFeature(*geog));
+      return StringVector::AddStringOrBlob(result, wkb);
     });
   }
 };
@@ -330,15 +321,10 @@ struct S2GeogPrepare {
 
           func.SetDescription(
               R"(
-Prepares a geography for faster predicate and overlay operations.
+Returns the input geography unchanged.
 
-For advanced users, this is useful for preparing input that will be subject
-to a large number of intersection or containment checks. This high level terms,
-this operation builds a cell-based index on the edges of the geography that
-would otherwise have to occur on every intersection check.
-
-This function returns its input for very small geographies (e.g., points)
-that do not benefit from this operation.
+GEOGRAPHY uses WKB as its native representation, which cannot persist an S2
+shape index. This function is retained as a compatibility no-op.
 )");
           func.SetExample(R"(
 SELECT s2_prepare(s2_data_country('Fiji'));
@@ -363,24 +349,9 @@ LIMIT 5;
   }
 
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
-    GeographyEncoder encoder;
-
     UnaryExecutor::Execute<string_t, string_t>(
         source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-
-          // For small geographies or something that is already prepared, don't
-          // trigger a new index. 64 bytes is arbitrary here (should be tuned).
-          if (decoder.tag.kind == s2geography::GeographyKind::SHAPE_INDEX ||
-              geog_str.GetSize() < 64) {
-            // Maybe a way to avoid copying geog_str?
-            return StringVector::AddStringOrBlob(result, geog_str);
-          }
-
-          std::unique_ptr<s2geography::Geography> geog = decoder.Decode(geog_str);
-          s2geography::ShapeIndexGeography index_geog(*geog);
-          return StringVector::AddStringOrBlob(result, encoder.Encode(index_geog));
+          return StringVector::AddStringOrBlob(result, geog_str);
         });
   }
 };

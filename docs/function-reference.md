@@ -45,16 +45,18 @@
 | [`s2_geogfromtext_novalidate`](#s2_geogfromtext_novalidate) | Returns the geography from a WKT string skipping validation.|
 | [`s2_geogfromwkb`](#s2_geogfromwkb) | Converts a WKB blob to a geography.|
 | [`s2_geogfromwkb_novalidate`](#s2_geogfromwkb_novalidate) | Returns the geography from a WKB blob skipping validation.|
-| [`s2_prepare`](#s2_prepare) | Prepares a geography for faster predicate and overlay operations.|
+| [`s2_prepare`](#s2_prepare) | Returns the input geography unchanged.|
 | [`s2_data_city`](#s2_data_city) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
 | [`s2_data_country`](#s2_data_country) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
 | [`s2_difference`](#s2_difference) | Returns the difference of two geographies.|
 | [`s2_intersection`](#s2_intersection) | Returns the intersection of two geographies.|
 | [`s2_union`](#s2_union) | Returns the union of two geographies.|
 | [`s2_contains`](#s2_contains) | Returns true if the first geography contains the second.|
+| [`s2_disjoint`](#s2_disjoint) | Returns true if the two geographies do not intersect.|
 | [`s2_equals`](#s2_equals) | Returns true if the two geographies are equal.|
 | [`s2_intersects`](#s2_intersects) | Returns true if the two geographies intersect.|
 | [`s2_mayintersect`](#s2_mayintersect) | Returns true if the two geographies may intersect.|
+| [`s2_within`](#s2_within) | Returns true if the first geography is within the second.|
 
 ## Accessors
 
@@ -1197,10 +1199,6 @@ VARCHAR s2_astext(geog GEOGRAPHY)
 
 #### Description
 
-Note that because the internal representation of the GEOGRAPHY type is either
-an S2_CELL_CENTER or a unit vector, WKT typically does not roundtrip through a
-GEOGRAPHY unless the output is rounded using `[s2_format()`][#s2_format].
-
 The output contains spherical edges. If edges are large and the consumer does
 not know that the edges are spherical, this may cause issues.
 
@@ -1228,9 +1226,8 @@ BLOB s2_aswkb(geog GEOGRAPHY)
 
 #### Description
 
-Note that because the internal representation of the GEOGRAPHY type is either
-an S2_CELL_CENTER or a unit vector, WKB typically does not roundtrip through a
-GEOGRAPHY.
+GEOGRAPHY uses WKB as its native representation, so this operation returns the
+underlying bytes unchanged.
 
 The output contains spherical edges. If edges are large and the consumer does
 not know that the edges are spherical, this may cause issues.
@@ -1386,7 +1383,7 @@ SELECT s2_geogfromwkb_novalidate(
 
 ### s2_prepare
 
-Prepares a geography for faster predicate and overlay operations.
+Returns the input geography unchanged.
 
 ```sql
 GEOGRAPHY s2_prepare(geog GEOGRAPHY)
@@ -1394,13 +1391,8 @@ GEOGRAPHY s2_prepare(geog GEOGRAPHY)
 
 #### Description
 
-For advanced users, this is useful for preparing input that will be subject
-to a large number of intersection or containment checks. This high level terms,
-this operation builds a cell-based index on the edges of the geography that
-would otherwise have to occur on every intersection check.
-
-This function returns its input for very small geographies (e.g., points)
-that do not benefit from this operation.
+GEOGRAPHY uses WKB as its native representation, which cannot persist an S2
+shape index. This function is retained as a compatibility no-op.
 
 #### Example
 
@@ -1605,6 +1597,20 @@ SELECT s2_contains(s2_data_country('Canada'), s2_data_city('Chicago'));
 --└─────────────────────────────────────────────────────────────────┘
 ```
 
+### s2_disjoint
+
+Returns true if the two geographies do not intersect.
+
+```sql
+BOOLEAN s2_disjoint(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
+```
+
+#### Example
+
+```sql
+SELECT s2_disjoint(s2_data_city('Toronto'), s2_data_city('Vancouver'));
+```
+
 ### s2_equals
 
 Returns true if the two geographies are equal.
@@ -1708,4 +1714,18 @@ SELECT s2_mayintersect(s2_data_country('Canada'), s2_data_city('Berlin'));
 --├────────────────────────────────────────────────────────────────────┤
 --│ true                                                               │
 --└────────────────────────────────────────────────────────────────────┘
+```
+
+### s2_within
+
+Returns true if the first geography is within the second.
+
+```sql
+BOOLEAN s2_within(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
+```
+
+#### Example
+
+```sql
+SELECT s2_within(s2_data_city('Toronto'), s2_data_country('Canada'));
 ```

@@ -86,7 +86,6 @@ set(EXTENSION_SOURCES
     src/s2_accessors.cpp
     src/s2_bounds.cpp
     src/s2_geoarrow.cpp)
-list(APPEND EXTENSION_SOURCES src/s2_geography2_ops.cpp)
 
 # Workaround for difference between v1.1.3 and main with respect to
 # FunctionEntry fields

@@ -30,16 +30,18 @@
 | [`s2_format`](#s2_format) | Returns the WKT string of the geography with a given precision.|
 | [`s2_geogfromtext`](#s2_geogfromtext) | Returns the geography from a WKT string.|
 | [`s2_geogfromwkb`](#s2_geogfromwkb) | Converts a WKB blob to a geography.|
-| [`s2_prepare`](#s2_prepare) | Prepares a geography for faster predicate and overlay operations.|
+| [`s2_prepare`](#s2_prepare) | Returns the input geography unchanged.|
 | [`s2_data_city`](#s2_data_city) | |
 | [`s2_data_country`](#s2_data_country) | |
 | [`s2_difference`](#s2_difference) | Returns the difference of two geographies.|
 | [`s2_intersection`](#s2_intersection) | Returns the intersection of two geographies.|
 | [`s2_union`](#s2_union) | Returns the union of two geographies.|
 | [`s2_contains`](#s2_contains) | Returns true if the first geography contains the second.|
+| [`s2_disjoint`](#s2_disjoint) | Returns true if the two geographies do not intersect.|
 | [`s2_equals`](#s2_equals) | Returns true if the two geographies are equal.|
 | [`s2_intersects`](#s2_intersects) | Returns true if the two geographies intersect.|
 | [`s2_mayintersect`](#s2_mayintersect) | Returns true if the two geographies may intersect.|
+| [`s2_within`](#s2_within) | Returns true if the first geography is within the second.|
 
 
 ## Accessors
@@ -332,7 +334,7 @@ GEOGRAPHY s2_geogfromwkb(wkb BLOB)
 
 ### s2_prepare
 
-Prepares a geography for faster predicate and overlay operations.
+Returns the input geography unchanged.
 
 ```sql
 GEOGRAPHY s2_prepare(geog GEOGRAPHY)
@@ -399,6 +401,15 @@ BOOLEAN s2_contains(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
 ```
 
 
+### s2_disjoint
+
+Returns true if the two geographies do not intersect.
+
+```sql
+BOOLEAN s2_disjoint(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
+```
+
+
 ### s2_equals
 
 Returns true if the two geographies are equal.
@@ -423,4 +434,13 @@ Returns true if the two geographies may intersect.
 
 ```sql
 BOOLEAN s2_mayintersect(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
+```
+
+
+### s2_within
+
+Returns true if the first geography is within the second.
+
+```sql
+BOOLEAN s2_within(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
 ```
