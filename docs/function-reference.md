@@ -45,7 +45,6 @@
 | [`s2_geogfromtext_novalidate`](#s2_geogfromtext_novalidate) | Returns the geography from a WKT string skipping validation.|
 | [`s2_geogfromwkb`](#s2_geogfromwkb) | Converts a WKB blob to a geography.|
 | [`s2_geogfromwkb_novalidate`](#s2_geogfromwkb_novalidate) | Returns the geography from a WKB blob skipping validation.|
-| [`s2_prepare`](#s2_prepare) | Returns the input geography unchanged.|
 | [`s2_data_city`](#s2_data_city) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
 | [`s2_data_country`](#s2_data_country) | Get an example city or country from [`s2_data_cities()`](#s2_data_cities)|
 | [`s2_difference`](#s2_difference) | Returns the difference of two geographies.|
@@ -1381,49 +1380,6 @@ SELECT s2_geogfromwkb_novalidate(
 --└───────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### s2_prepare
-
-Returns the input geography unchanged.
-
-```sql
-GEOGRAPHY s2_prepare(geog GEOGRAPHY)
-```
-
-#### Description
-
-GEOGRAPHY uses WKB as its native representation, which cannot persist an S2
-shape index. This function is retained as a compatibility no-op.
-
-#### Example
-
-```sql
-SELECT s2_prepare(s2_data_country('Fiji'));
---┌─────────────────────────────────────┐
---│ s2_prepare(s2_data_country('Fiji')) │
---│              geography              │
---├─────────────────────────────────────┤
---│ <S2ShapeIndex 478 b>                │
---└─────────────────────────────────────┘
-
-CREATE TABLE countries AS
-SELECT name, s2_prepare(geog) as geog
-FROM s2_data_countries();
-
-SELECT cities.name as city, countries.name as country
-FROM s2_data_cities() AS cities
-INNER JOIN countries ON s2_contains(countries.geog, cities.geog)
-LIMIT 5;
---┌───────────┬──────────────────────┐
---│   city    │       country        │
---│  varchar  │       varchar        │
---├───────────┼──────────────────────┤
---│ Kabul     │ Afghanistan          │
---│ Luanda    │ Angola               │
---│ Tirana    │ Albania              │
---│ Abu Dhabi │ United Arab Emirates │
---│ Dubai     │ United Arab Emirates │
---└───────────┴──────────────────────┘
-```
 ## Data
 
 ### s2_data_city

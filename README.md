@@ -11,7 +11,7 @@ In general, the functions are the same as those implemented in the [spatial exte
 ```
 LOAD geography;
 
-D CREATE TABLE countries as SELECT name, s2_prepare(geog) as geog FROM s2_data_countries();
+D CREATE TABLE countries as SELECT name, geog FROM s2_data_countries();
 D SELECT
     countries.name as country, cities.name as city, cities.geog as geog
   FROM countries

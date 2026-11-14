@@ -309,53 +309,6 @@ SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
   }
 };
 
-struct S2GeogPrepare {
-  static void Register(ExtensionLoader& loader) {
-    FunctionBuilder::RegisterScalar(
-        loader, "s2_prepare", [](ScalarFunctionBuilder& func) {
-          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
-            variant.AddParameter("geog", Types::GEOGRAPHY());
-            variant.SetReturnType(Types::GEOGRAPHY());
-            variant.SetFunction(ExecuteFn);
-          });
-
-          func.SetDescription(
-              R"(
-Returns the input geography unchanged.
-
-GEOGRAPHY uses WKB as its native representation, which cannot persist an S2
-shape index. This function is retained as a compatibility no-op.
-)");
-          func.SetExample(R"(
-SELECT s2_prepare(s2_data_country('Fiji'));
-----
-CREATE TABLE countries AS
-SELECT name, s2_prepare(geog) as geog
-FROM s2_data_countries();
-
-SELECT cities.name as city, countries.name as country
-FROM s2_data_cities() AS cities
-INNER JOIN countries ON s2_contains(countries.geog, cities.geog)
-LIMIT 5;
-)");
-
-          func.SetTag("ext", "geography");
-          func.SetTag("category", "conversion");
-        });
-  }
-
-  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    Execute(args.data[0], result, args.size());
-  }
-
-  static inline void Execute(Vector& source, Vector& result, idx_t count) {
-    UnaryExecutor::Execute<string_t, string_t>(
-        source, result, count, [&](string_t geog_str) {
-          return StringVector::AddStringOrBlob(result, geog_str);
-        });
-  }
-};
-
 void ImportWKBToGeography(const Vector& source, Vector& result, idx_t count) {
   S2GeogFromWKB::Execute(source, result, count, s2geography::geoarrow::ImportOptions());
 }
@@ -369,7 +322,6 @@ void RegisterS2GeographyFunctionsIO(ExtensionLoader& loader) {
   S2GeogFromWKB::Register(loader);
   S2AsText::Register(loader);
   S2AsWKB::Register(loader);
-  S2GeogPrepare::Register(loader);
 }
 
 }  // namespace duckdb_s2

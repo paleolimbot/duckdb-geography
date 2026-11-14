@@ -30,7 +30,6 @@
 | [`s2_format`](#s2_format) | Returns the WKT string of the geography with a given precision.|
 | [`s2_geogfromtext`](#s2_geogfromtext) | Returns the geography from a WKT string.|
 | [`s2_geogfromwkb`](#s2_geogfromwkb) | Converts a WKB blob to a geography.|
-| [`s2_prepare`](#s2_prepare) | Returns the input geography unchanged.|
 | [`s2_data_city`](#s2_data_city) | |
 | [`s2_data_country`](#s2_data_country) | |
 | [`s2_difference`](#s2_difference) | Returns the difference of two geographies.|
@@ -331,14 +330,6 @@ Converts a WKB blob to a geography.
 GEOGRAPHY s2_geogfromwkb(wkb BLOB)
 ```
 
-
-### s2_prepare
-
-Returns the input geography unchanged.
-
-```sql
-GEOGRAPHY s2_prepare(geog GEOGRAPHY)
-```
 
 ## Data
 
