@@ -220,3 +220,17 @@ query I
 SELECT s2_max_distance(s2_data_city('Vancouver'), s2_data_country('Fiji')) > s2_distance(s2_data_city('Vancouver'), s2_data_country('Fiji'))
 ----
 true
+
+# Predicates introduced with the WKB-backed implementation
+query I
+SELECT s2_within(
+  'POINT (5 5)'::GEOGRAPHY,
+  'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))'::GEOGRAPHY
+)
+----
+true
+
+query I
+SELECT s2_disjoint('POINT (5 5)'::GEOGRAPHY, 'POINT (20 20)'::GEOGRAPHY)
+----
+true

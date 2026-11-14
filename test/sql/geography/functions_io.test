@@ -39,14 +39,8 @@ SELECT s2_geogfromwkb_novalidate(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 
 ----
 LINESTRING (0 0, 0 0, 1 1)
 
-# Prepare of small geographies doesn't trigger an index
+# Importing and exporting WKB preserves its native bytes
 query I
-SELECT ('POINT (30 10)'::GEOGRAPHY).s2_prepare().s2_format(6);
+SELECT s2_aswkb(s2_geogfromwkb(from_hex('0101000000000000000000F03F0000000000000040'))) = from_hex('0101000000000000000000F03F0000000000000040');
 ----
-POINT (30 10)
-
-# Prepare of bigger geographies should trigger an index
-query I
-SELECT ('LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4)'::GEOGRAPHY).s2_prepare();
-----
-<S2ShapeIndex 128 b>
+true
