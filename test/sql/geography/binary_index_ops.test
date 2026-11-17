@@ -234,3 +234,27 @@ query I
 SELECT s2_disjoint('POINT (5 5)'::GEOGRAPHY, 'POINT (20 20)'::GEOGRAPHY)
 ----
 true
+
+# Exercise batch execution with one scalar geography prepared once
+query I rowsort
+SELECT s2_contains(
+  'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))'::GEOGRAPHY,
+  wkt::GEOGRAPHY
+)
+FROM (VALUES ('POINT (5 5)'), ('POINT (20 20)')) AS values_(wkt)
+----
+false
+true
+
+query I rowsort
+SELECT s2_dwithin('POINT (0 0)'::GEOGRAPHY, wkt::GEOGRAPHY, 200)
+FROM (VALUES ('POINT (0.001 0)'), ('POINT (1 0)')) AS values_(wkt)
+----
+false
+true
+
+# NULL propagation is handled by the DuckDB batch wrapper
+query I
+SELECT s2_intersects(NULL::GEOGRAPHY, 'POINT (0 0)'::GEOGRAPHY)
+----
+NULL
