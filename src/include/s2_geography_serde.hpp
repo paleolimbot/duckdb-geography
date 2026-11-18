@@ -2,6 +2,7 @@
 #include "duckdb.hpp"
 
 #include "s2geography/geography.h"
+#include "s2geography/wkb.h"
 
 namespace duckdb {
 
@@ -12,46 +13,57 @@ class GeographyDecoder {
   s2geography::EncodeTag tag{};
   std::vector<S2CellId> covering{};
 
-  GeographyDecoder() = default;
+  GeographyDecoder() : reader_(UncheckedImportOptions()) {}
 
   void DecodeTag(string_t data) {
-    decoder_.reset(data.GetPrefix(), 4);
-    tag.Decode(&decoder_);
+    auto geog = Decode(data);
+    tag = {};
+    tag.kind = geog->kind();
+    if (geog->num_shapes() == 0) {
+      tag.flags |= s2geography::EncodeTag::kFlagEmpty;
+    }
   }
 
   void DecodeTagAndCovering(string_t data) {
-    decoder_.reset(data.GetData(), data.GetSize());
+    auto geog = Decode(data);
+    tag = {};
+    tag.kind = geog->kind();
     covering.clear();
-    tag.Decode(&decoder_);
-    tag.DecodeCovering(&decoder_, &covering);
+    if (geog->num_shapes() == 0) {
+      tag.flags |= s2geography::EncodeTag::kFlagEmpty;
+    } else {
+      geog->GetCellUnionBound(&covering);
+      tag.covering_size = covering.size();
+    }
   }
 
   std::unique_ptr<s2geography::Geography> Decode(string_t data) {
-    decoder_.reset(data.GetData(), data.GetSize());
-    return s2geography::Geography::DecodeTagged(&decoder_);
+    return reader_.ReadFeature(
+        std::string_view(data.GetData(), static_cast<size_t>(data.GetSize())));
   }
 
  private:
-  Decoder decoder_{};
+  static s2geography::geoarrow::ImportOptions UncheckedImportOptions() {
+    s2geography::geoarrow::ImportOptions options;
+    options.set_check(false);
+    return options;
+  }
+
+  s2geography::WKBReader reader_;
 };
 
 class GeographyEncoder {
  public:
-  GeographyEncoder() {
-    options_.set_coding_hint(s2coding::CodingHint::COMPACT);
-    options_.set_enable_lazy_decode(true);
-    options_.set_include_covering(true);
-  }
+  GeographyEncoder() = default;
 
   string_t Encode(const s2geography::Geography& geog) {
-    encoder_.Resize(0);
-    geog.EncodeTagged(&encoder_, options_);
-    return string_t{encoder_.base(), static_cast<uint32_t>(encoder_.length())};
+    encoded_ = writer_.WriteFeature(geog);
+    return string_t{encoded_.data(), static_cast<uint32_t>(encoded_.size())};
   }
 
  private:
-  Encoder encoder_{};
-  s2geography::EncodeOptions options_{};
+  s2geography::WKBWriter writer_{};
+  std::string encoded_{};
 };
 
 }  // namespace duckdb_s2

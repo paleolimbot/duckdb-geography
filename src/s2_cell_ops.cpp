@@ -525,32 +525,16 @@ struct S2CellCenterToGeography {
   }
 
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
-    // Most cells will get serialized as a tag + cell_id
-    Encoder non_empty;
-    s2geography::EncodeTag tag;
-    tag.kind = s2geography::GeographyKind::CELL_CENTER;
-    tag.covering_size = 1;
-    tag.Encode(&non_empty);
-    non_empty.Ensure(sizeof(uint64_t));
-    non_empty.put64(0);
-    string_t non_empty_str{non_empty.base(), static_cast<uint32_t>(non_empty.length())};
-    char* non_empty_cell_id = non_empty_str.GetPrefixWriteable() + 4;
-
-    // Invalid cells will get serialized as an empty point
-    Encoder empty;
-    tag.kind = s2geography::GeographyKind::POINT;
-    tag.covering_size = 0;
-    tag.flags |= s2geography::EncodeTag::kFlagEmpty;
-    tag.Encode(&empty);
-    string_t empty_str{empty.base(), static_cast<uint32_t>(empty.length())};
+    GeographyEncoder encoder;
 
     UnaryExecutor::Execute<uint64_t, string_t>(source, result, count, [&](uint64_t arg0) {
       S2CellId cell(arg0);
       if (cell.is_valid()) {
-        std::memcpy(non_empty_cell_id, &arg0, sizeof(arg0));
-        return non_empty_str;
+        s2geography::PointGeography geog(cell.ToPoint());
+        return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
       } else {
-        return empty_str;
+        s2geography::PointGeography geog;
+        return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
       }
     });
   }

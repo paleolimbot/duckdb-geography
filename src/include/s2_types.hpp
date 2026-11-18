@@ -12,7 +12,6 @@ struct Types {
   static LogicalType S2_CELL_UNION();
   static LogicalType S2_CELL_CENTER();
   static LogicalType GEOGRAPHY();
-  static LogicalType GEOGRAPHY2();
   static LogicalType S2_BOX();
 };
 

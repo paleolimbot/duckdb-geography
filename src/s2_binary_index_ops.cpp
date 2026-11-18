@@ -9,6 +9,7 @@
 #include "s2_types.hpp"
 
 #include "s2geography/build.h"
+#include "s2geography_c.h"
 
 #include "function_builder.hpp"
 #include "global_options.hpp"
@@ -19,6 +20,150 @@ namespace duckdb_s2 {
 
 namespace {
 using UniqueGeography = std::unique_ptr<s2geography::Geography>;
+
+class WKBOperationContext {
+ public:
+  explicit WKBOperationContext(int operation_id) {
+    CheckCreate(S2GeogErrorCreate(&error_), "error");
+    Check(S2GeogFactoryCreate(&factory_));
+    Check(S2GeogCreate(&lhs_.geog));
+    Check(S2GeogCreate(&rhs_.geog));
+    Check(S2GeogOpCreate(&operation_, operation_id));
+  }
+
+  ~WKBOperationContext() {
+    if (operation_) S2GeogOpDestroy(operation_);
+    if (rhs_.geog) S2GeogDestroy(rhs_.geog);
+    if (lhs_.geog) S2GeogDestroy(lhs_.geog);
+    if (factory_) S2GeogFactoryDestroy(factory_);
+    if (error_) S2GeogErrorDestroy(error_);
+  }
+
+  WKBOperationContext(const WKBOperationContext&) = delete;
+  WKBOperationContext& operator=(const WKBOperationContext&) = delete;
+
+  bool Execute(const string_t& lhs, const string_t& rhs) {
+    Prepare(lhs_, lhs);
+    Prepare(rhs_, rhs);
+    Check(S2GeogOpEvalGeogGeog(operation_, lhs_.geog, rhs_.geog, error_));
+    return S2GeogOpGetInt(operation_) != 0;
+  }
+
+  bool Execute(const string_t& lhs, const string_t& rhs, double arg) {
+    Prepare(lhs_, lhs);
+    Prepare(rhs_, rhs);
+    Check(S2GeogOpEvalGeogGeogDouble(operation_, lhs_.geog, rhs_.geog, arg, error_));
+    return S2GeogOpGetInt(operation_) != 0;
+  }
+
+ private:
+  struct PreparedGeography {
+    S2Geog* geog = nullptr;
+    const char* data = nullptr;
+    idx_t size = 0;
+    bool initialized = false;
+  };
+
+  void Prepare(PreparedGeography& prepared, const string_t& wkb) {
+    // UnifiedVectorFormat gives us stable string_t storage for this batch. A
+    // constant vector therefore keeps the same data pointer across rows and is
+    // parsed/prepared only once; non-constant values reuse the same geography
+    // object's scratch space while retaining a zero-copy view of their WKB.
+    if (prepared.initialized && prepared.data == wkb.GetData() &&
+        prepared.size == wkb.GetSize()) {
+      return;
+    }
+
+    Check(S2GeogFactoryInitFromWkbNonOwning(
+        factory_, reinterpret_cast<const uint8_t*>(wkb.GetData()), wkb.GetSize(),
+        prepared.geog, error_));
+    prepared.data = wkb.GetData();
+    prepared.size = wkb.GetSize();
+    prepared.initialized = true;
+  }
+
+  void Check(S2GeogErrorCode code) {
+    if (code != S2GEOGRAPHY_OK) {
+      throw InvalidInputException("s2geography error: %s", S2GeogErrorGetMessage(error_));
+    }
+  }
+
+  static void CheckCreate(S2GeogErrorCode code, const char* object_name) {
+    if (code != S2GEOGRAPHY_OK) {
+      throw InternalException("Could not create s2geography %s object", object_name);
+    }
+  }
+
+  S2GeogError* error_ = nullptr;
+  S2GeogFactory* factory_ = nullptr;
+  PreparedGeography lhs_;
+  PreparedGeography rhs_;
+  S2GeogOp* operation_ = nullptr;
+};
+
+static void ExecuteBinaryWKBOperation(Vector& lhs, Vector& rhs, Vector& result,
+                                      idx_t count, int operation_id) {
+  UnifiedVectorFormat lhs_format;
+  UnifiedVectorFormat rhs_format;
+  lhs.ToUnifiedFormat(count, lhs_format);
+  rhs.ToUnifiedFormat(count, rhs_format);
+
+  const auto lhs_data = UnifiedVectorFormat::GetData<string_t>(lhs_format);
+  const auto rhs_data = UnifiedVectorFormat::GetData<string_t>(rhs_format);
+
+  result.SetVectorType(VectorType::FLAT_VECTOR);
+  auto result_data = FlatVector::GetDataMutable<bool>(result);
+  auto& result_validity = FlatVector::ValidityMutable(result);
+  result_validity.SetAllValid(count);
+
+  WKBOperationContext operation(operation_id);
+  for (idx_t row = 0; row < count; row++) {
+    const auto lhs_index = lhs_format.sel->get_index(row);
+    const auto rhs_index = rhs_format.sel->get_index(row);
+    if (!lhs_format.validity.RowIsValid(lhs_index) ||
+        !rhs_format.validity.RowIsValid(rhs_index)) {
+      result_validity.SetInvalid(row);
+      continue;
+    }
+
+    result_data[row] = operation.Execute(lhs_data[lhs_index], rhs_data[rhs_index]);
+  }
+}
+
+static void ExecuteTernaryWKBOperation(Vector& lhs, Vector& rhs, Vector& arg,
+                                       Vector& result, idx_t count, int operation_id) {
+  UnifiedVectorFormat lhs_format;
+  UnifiedVectorFormat rhs_format;
+  UnifiedVectorFormat arg_format;
+  lhs.ToUnifiedFormat(count, lhs_format);
+  rhs.ToUnifiedFormat(count, rhs_format);
+  arg.ToUnifiedFormat(count, arg_format);
+
+  const auto lhs_data = UnifiedVectorFormat::GetData<string_t>(lhs_format);
+  const auto rhs_data = UnifiedVectorFormat::GetData<string_t>(rhs_format);
+  const auto arg_data = UnifiedVectorFormat::GetData<double>(arg_format);
+
+  result.SetVectorType(VectorType::FLAT_VECTOR);
+  auto result_data = FlatVector::GetDataMutable<bool>(result);
+  auto& result_validity = FlatVector::ValidityMutable(result);
+  result_validity.SetAllValid(count);
+
+  WKBOperationContext operation(operation_id);
+  for (idx_t row = 0; row < count; row++) {
+    const auto lhs_index = lhs_format.sel->get_index(row);
+    const auto rhs_index = rhs_format.sel->get_index(row);
+    const auto arg_index = arg_format.sel->get_index(row);
+    if (!lhs_format.validity.RowIsValid(lhs_index) ||
+        !rhs_format.validity.RowIsValid(rhs_index) ||
+        !arg_format.validity.RowIsValid(arg_index)) {
+      result_validity.SetInvalid(row);
+      continue;
+    }
+
+    result_data[row] =
+        operation.Execute(lhs_data[lhs_index], rhs_data[rhs_index], arg_data[arg_index]);
+  }
+}
 
 // Handle the case where we've already computed the index on one or both
 // of the sides in advance
@@ -130,6 +275,47 @@ SELECT s2_contains(s2_data_country('Canada'), s2_data_city('Chicago'));
           func.SetTag("category", "predicates");
         });
 
+    FunctionBuilder::RegisterScalar(loader, "s2_within", [](ScalarFunctionBuilder& func) {
+      func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+        variant.AddParameter("geog1", Types::GEOGRAPHY());
+        variant.AddParameter("geog2", Types::GEOGRAPHY());
+        variant.SetReturnType(LogicalType::BOOLEAN);
+        variant.SetFunction(ExecuteWithinFn);
+      });
+
+      func.SetDescription(R"(
+Returns true if the first geography is within the second.
+)");
+
+      func.SetExample(R"(
+SELECT s2_within(s2_data_city('Toronto'), s2_data_country('Canada'));
+)");
+
+      func.SetTag("ext", "geography");
+      func.SetTag("category", "predicates");
+    });
+
+    FunctionBuilder::RegisterScalar(
+        loader, "s2_disjoint", [](ScalarFunctionBuilder& func) {
+          func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
+            variant.AddParameter("geog1", Types::GEOGRAPHY());
+            variant.AddParameter("geog2", Types::GEOGRAPHY());
+            variant.SetReturnType(LogicalType::BOOLEAN);
+            variant.SetFunction(ExecuteDisjointFn);
+          });
+
+          func.SetDescription(R"(
+Returns true if the two geographies do not intersect.
+)");
+
+          func.SetExample(R"(
+SELECT s2_disjoint(s2_data_city('Toronto'), s2_data_city('Vancouver'));
+)");
+
+          func.SetTag("ext", "geography");
+          func.SetTag("category", "predicates");
+        });
+
     FunctionBuilder::RegisterScalar(loader, "s2_equals", [](ScalarFunctionBuilder& func) {
       func.AddVariant([](ScalarFunctionVariantBuilder& variant) {
         variant.AddParameter("geog1", Types::GEOGRAPHY());
@@ -235,47 +421,28 @@ SELECT s2_union(
 
   static void ExecuteIntersectsFn(DataChunk& args, ExpressionState& state,
                                   Vector& result) {
-    S2BooleanOperation::Options options;
-    InitBooleanOperationOptions(&options);
-
-    return ExecutePredicateFn(
-        args, state, result, [&options](UniqueGeography lhs, UniqueGeography rhs) {
-          return DispatchShapeIndexOp(
-              std::move(lhs), std::move(rhs),
-              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
-                return S2BooleanOperation::Intersects(lhs_index, rhs_index, options);
-              });
-        });
+    ExecuteBinaryWKBOperation(args.data[0], args.data[1], result, args.size(),
+                              S2GEOGRAPHY_OP_INTERSECTS);
   }
 
   static void ExecuteContainsFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    // Note: Polygon containment when there is a partial shared edge might
-    // need to be calculated differently.
-    S2BooleanOperation::Options options;
-    InitBooleanOperationOptions(&options);
+    ExecuteBinaryWKBOperation(args.data[0], args.data[1], result, args.size(),
+                              S2GEOGRAPHY_OP_CONTAINS);
+  }
 
-    return ExecutePredicateFn(
-        args, state, result, [&options](UniqueGeography lhs, UniqueGeography rhs) {
-          return DispatchShapeIndexOp(
-              std::move(lhs), std::move(rhs),
-              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
-                return S2BooleanOperation::Contains(lhs_index, rhs_index, options);
-              });
-        });
+  static void ExecuteWithinFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ExecuteBinaryWKBOperation(args.data[0], args.data[1], result, args.size(),
+                              S2GEOGRAPHY_OP_WITHIN);
+  }
+
+  static void ExecuteDisjointFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ExecuteBinaryWKBOperation(args.data[0], args.data[1], result, args.size(),
+                              S2GEOGRAPHY_OP_DISJOINT);
   }
 
   static void ExecuteEqualsFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    S2BooleanOperation::Options options;
-    InitBooleanOperationOptions(&options);
-
-    return ExecutePredicateFn(
-        args, state, result, [&options](UniqueGeography lhs, UniqueGeography rhs) {
-          return DispatchShapeIndexOp(
-              std::move(lhs), std::move(rhs),
-              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
-                return S2BooleanOperation::Equals(lhs_index, rhs_index, options);
-              });
-        });
+    ExecuteBinaryWKBOperation(args.data[0], args.data[1], result, args.size(),
+                              S2GEOGRAPHY_OP_EQUALS);
   }
 
   template <typename Filter>
@@ -501,45 +668,8 @@ SELECT s2_dwithin(
 
   static void Execute(Vector& lhs, Vector& rhs, Vector& dist, Vector& result,
                       idx_t count) {
-    GeographyDecoder lhs_decoder;
-    GeographyDecoder rhs_decoder;
-
-    TernaryExecutor::Execute<string_t, string_t, double, bool>(
-        lhs, rhs, dist, result, count,
-        [&](string_t geog1_str, string_t geog2_str, double distance_meters) {
-          lhs_decoder.DecodeTag(geog1_str);
-          rhs_decoder.DecodeTag(geog2_str);
-
-          // If either geography is empty, the result is false
-          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty ||
-              rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return false;
-          }
-
-          double distance_radians = distance_meters / S2Earth::RadiusMeters();
-
-          // If we have two snapped cell centers, just calculate the distance directly
-          if (lhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER &&
-              rhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
-            S2CellId cell_id1(LittleEndian::Load64(geog1_str.GetData() + 4));
-            S2CellId cell_id2(LittleEndian::Load64(geog2_str.GetData() + 4));
-            S1ChordAngle distance(cell_id1.ToPoint(), cell_id2.ToPoint());
-            return distance.radians() <= distance_radians;
-          }
-
-          // Otherwise, decode and use the S2ClosestEdgeQuery
-          auto geog1 = lhs_decoder.Decode(geog1_str);
-          auto geog2 = rhs_decoder.Decode(geog2_str);
-
-          return DispatchShapeIndexOp(
-              std::move(geog1), std::move(geog2),
-              [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
-                S2ClosestEdgeQuery query(&lhs);
-                S2ClosestEdgeQuery::ShapeIndexTarget target(&rhs);
-                return query.IsDistanceLessOrEqual(
-                    &target, S1ChordAngle::Radians(distance_radians));
-              });
-        });
+    ExecuteTernaryWKBOperation(lhs, rhs, dist, result, count,
+                               S2GEOGRAPHY_OP_DISTANCE_WITHIN);
   }
 };
 
