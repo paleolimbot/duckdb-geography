@@ -2,17 +2,15 @@
 #include "duckdb/main/database.hpp"
 
 #include "s2/s2cell_union.h"
-#include "s2/s2closest_edge_query.h"
-#include "s2/s2earth.h"
-#include "s2/s2furthest_edge_query.h"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
 #include "s2geography/build.h"
 #include "s2geography_c.h"
 
+#include "arrow_scalar_udf.hpp"
 #include "function_builder.hpp"
-#include "global_options.hpp"
+#include "s2geography/distance.h"
 
 namespace duckdb {
 
@@ -162,35 +160,6 @@ static void ExecuteTernaryWKBOperation(Vector& lhs, Vector& rhs, Vector& arg,
 
     result_data[row] =
         operation.Execute(lhs_data[lhs_index], rhs_data[rhs_index], arg_data[arg_index]);
-  }
-}
-
-// Handle the case where we've already computed the index on one or both
-// of the sides in advance
-template <typename ShapeIndexFilter>
-static auto DispatchShapeIndexOp(UniqueGeography lhs, UniqueGeography rhs,
-                                 ShapeIndexFilter&& filter) {
-  if (lhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX &&
-      rhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
-    auto lhs_index =
-        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(lhs.get());
-    auto rhs_index =
-        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(rhs.get());
-    return filter(lhs_index->ShapeIndex(), rhs_index->ShapeIndex());
-  } else if (lhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
-    auto lhs_index =
-        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(lhs.get());
-    s2geography::ShapeIndexGeography rhs_index(*rhs);
-    return filter(lhs_index->ShapeIndex(), rhs_index.ShapeIndex());
-  } else if (rhs->kind() == s2geography::GeographyKind::ENCODED_SHAPE_INDEX) {
-    s2geography::ShapeIndexGeography lhs_index(*lhs);
-    auto rhs_index =
-        reinterpret_cast<s2geography::EncodedShapeIndexGeography*>(rhs.get());
-    return filter(lhs_index.ShapeIndex(), rhs_index->ShapeIndex());
-  } else {
-    s2geography::ShapeIndexGeography lhs_index(*lhs);
-    s2geography::ShapeIndexGeography rhs_index(*rhs);
-    return filter(lhs_index.ShapeIndex(), rhs_index.ShapeIndex());
   }
 }
 
@@ -351,6 +320,9 @@ SELECT s2_equals(s2_data_city('Toronto'), s2_data_country('Canada'));
 
           func.SetDescription(R"(
 Returns the intersection of two geographies.
+
+Returns an empty geography if either input is empty. Empty overlay results may
+retain their geometry type (for example, POINT EMPTY).
 )");
 
           func.SetExample(R"(
@@ -480,138 +452,16 @@ SELECT s2_union(
 
   static void ExecuteIntersectionFn(DataChunk& args, ExpressionState& state,
                                     Vector& result) {
-    ExecuteIntersection(args.data[0], args.data[1], result, args.size());
+    ArrowScalarFunction<s2geography::sedona_udf::IntersectionKernel>(args, state, result);
   }
 
   static void ExecuteDifferenceFn(DataChunk& args, ExpressionState& state,
                                   Vector& result) {
-    ExecuteDifference(args.data[0], args.data[1], result, args.size());
+    ArrowScalarFunction<s2geography::sedona_udf::DifferenceKernel>(args, state, result);
   }
 
   static void ExecuteUnionFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    ExecuteUnion(args.data[0], args.data[1], result, args.size());
-  }
-
-  static void ExecuteIntersection(Vector& lhs, Vector& rhs, Vector& result, idx_t count) {
-    GeographyDecoder lhs_decoder;
-    GeographyDecoder rhs_decoder;
-    GeographyEncoder encoder;
-    std::vector<S2CellId> intersection;
-
-    s2geography::GlobalOptions options;
-    InitGlobalOptions(&options);
-
-    BinaryExecutor::Execute<string_t, string_t, string_t>(
-        lhs, rhs, result, count, [&](string_t lhs_str, string_t rhs_str) {
-          lhs_decoder.DecodeTagAndCovering(lhs_str);
-
-          // If the lefthand side is empty, the intersection is the righthand side
-          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return StringVector::AddStringOrBlob(result, rhs_str);
-          }
-
-          // If the righthand side is empty, the intersection is the lefthand side
-          rhs_decoder.DecodeTagAndCovering(rhs_str);
-          if (rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return StringVector::AddStringOrBlob(result, lhs_str);
-          }
-
-          // For definitely disjoint input, the intersection is empty
-          if (!CoveringMayIntersect(lhs_decoder, rhs_decoder, &intersection)) {
-            auto geog = make_uniq<s2geography::GeographyCollection>();
-            return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
-          }
-
-          auto geog = DispatchShapeIndexOp(
-              lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str),
-              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
-                return s2geography::s2_boolean_operation(
-                    lhs_index, rhs_index, S2BooleanOperation::OpType::INTERSECTION,
-                    options);
-              });
-
-          return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
-        });
-  }
-
-  static void ExecuteDifference(Vector& lhs, Vector& rhs, Vector& result, idx_t count) {
-    GeographyDecoder lhs_decoder;
-    GeographyDecoder rhs_decoder;
-    GeographyEncoder encoder;
-    std::vector<S2CellId> intersection;
-
-    s2geography::GlobalOptions options;
-    InitGlobalOptions(&options);
-
-    BinaryExecutor::Execute<string_t, string_t, string_t>(
-        lhs, rhs, result, count, [&](string_t lhs_str, string_t rhs_str) {
-          lhs_decoder.DecodeTagAndCovering(lhs_str);
-
-          // If the lefthand side is empty, the difference is also empty
-          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            auto geog = make_uniq<s2geography::GeographyCollection>();
-            return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
-          }
-
-          // If the righthand side is empty, the difference is the lefthand side
-          rhs_decoder.DecodeTagAndCovering(rhs_str);
-          if (rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return StringVector::AddStringOrBlob(result, lhs_str);
-          }
-
-          // For definitely disjoint input, the intersection is the lefthand side
-          if (!CoveringMayIntersect(lhs_decoder, rhs_decoder, &intersection)) {
-            auto geog = make_uniq<s2geography::GeographyCollection>();
-            return StringVector::AddStringOrBlob(result, lhs_str);
-          }
-
-          auto geog = DispatchShapeIndexOp(
-              lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str),
-              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
-                return s2geography::s2_boolean_operation(
-                    lhs_index, rhs_index, S2BooleanOperation::OpType::DIFFERENCE,
-                    options);
-              });
-
-          return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
-        });
-  }
-
-  static void ExecuteUnion(Vector& lhs, Vector& rhs, Vector& result, idx_t count) {
-    GeographyDecoder lhs_decoder;
-    GeographyDecoder rhs_decoder;
-    GeographyEncoder encoder;
-    std::vector<S2CellId> intersection;
-
-    s2geography::GlobalOptions options;
-    InitGlobalOptions(&options);
-
-    BinaryExecutor::Execute<string_t, string_t, string_t>(
-        lhs, rhs, result, count, [&](string_t lhs_str, string_t rhs_str) {
-          lhs_decoder.DecodeTagAndCovering(lhs_str);
-
-          // If the lefthand side is empty, the union is the righthand side
-          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return StringVector::AddStringOrBlob(result, rhs_str);
-          }
-
-          // If the righthand side is empty, the union is the lefthand side
-          rhs_decoder.DecodeTagAndCovering(rhs_str);
-          if (rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return StringVector::AddStringOrBlob(result, lhs_str);
-          }
-
-          // (No optimization for definitely disjoint binary union)
-
-          auto geog = DispatchShapeIndexOp(
-              lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str),
-              [&options](const S2ShapeIndex& lhs_index, const S2ShapeIndex& rhs_index) {
-                return s2geography::s2_boolean_operation(
-                    lhs_index, rhs_index, S2BooleanOperation::OpType::UNION, options);
-              });
-
-          return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
-        });
+    ArrowScalarFunction<s2geography::sedona_udf::UnionKernel>(args, state, result);
   }
 
   static bool CoveringMayIntersect(const GeographyDecoder& lhs,
@@ -686,6 +536,8 @@ struct S2Distance {
 
           func.SetDescription(R"(
 Calculate the shortest distance between two geographies.
+
+Returns NULL if either geography is empty.
 )");
           func.SetExample(R"(
 SELECT s2_distance(
@@ -709,6 +561,8 @@ SELECT s2_distance(
 
           func.SetDescription(R"(
 Calculate the farthest distance between two geographies.
+
+Returns NULL if either geography is empty.
 )");
           func.SetExample(R"(
 SELECT s2_max_distance(
@@ -722,59 +576,17 @@ SELECT s2_max_distance(
         });
   }
 
-  static inline void ExecuteDistanceFn(DataChunk& args, ExpressionState& state,
-                                       Vector& result) {
-    Execute(args.data[0], args.data[1], result, args.size(),
-            [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
-              S2ClosestEdgeQuery query(&lhs);
-              S2ClosestEdgeQuery::ShapeIndexTarget target(&rhs);
-              return query.FindClosestEdge(&target).distance().radians() *
-                     S2Earth::RadiusMeters();
-            });
+  static void ExecuteDistanceFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ExecuteArrowScalar(
+        [](SedonaCScalarKernel* out) { s2geography::sedona_udf::DistanceKernel(out); },
+        state.GetContext(), args, result);
   }
 
-  static inline void ExecuteMaxDistanceFn(DataChunk& args, ExpressionState& state,
-                                          Vector& result) {
-    Execute(args.data[0], args.data[1], result, args.size(),
-            [&](const S2ShapeIndex& lhs, const S2ShapeIndex& rhs) {
-              S2FurthestEdgeQuery query(&lhs);
-              S2FurthestEdgeQuery::ShapeIndexTarget target(&rhs);
-              return query.FindFurthestEdge(&target).distance().radians() *
-                     S2Earth::RadiusMeters();
-            });
-  }
-
-  template <typename Op>
-  static void Execute(Vector& lhs, Vector& rhs, Vector& result, idx_t count, Op&& op) {
-    GeographyDecoder lhs_decoder;
-    GeographyDecoder rhs_decoder;
-
-    BinaryExecutor::Execute<string_t, string_t, double>(
-        lhs, rhs, result, count, [&](string_t geog1_str, string_t geog2_str) {
-          lhs_decoder.DecodeTag(geog1_str);
-          rhs_decoder.DecodeTag(geog2_str);
-
-          // If either geography is empty, the result is Inf
-          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty ||
-              rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return std::numeric_limits<double>::infinity();
-          }
-
-          // If we have two snapped cell centers, just calculate the distance directly
-          if (lhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER &&
-              rhs_decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
-            S2CellId cell_id1(LittleEndian::Load64(geog1_str.GetData() + 4));
-            S2CellId cell_id2(LittleEndian::Load64(geog2_str.GetData() + 4));
-            S1ChordAngle distance(cell_id1.ToPoint(), cell_id2.ToPoint());
-            return distance.radians() * S2Earth::RadiusMeters();
-          }
-
-          // Otherwise, decode and use s2_distance()
-          auto geog1 = lhs_decoder.Decode(geog1_str);
-          auto geog2 = rhs_decoder.Decode(geog2_str);
-
-          return DispatchShapeIndexOp(std::move(geog1), std::move(geog2), op);
-        });
+  static void ExecuteMaxDistanceFn(DataChunk& args, ExpressionState& state,
+                                   Vector& result) {
+    ExecuteArrowScalar(
+        [](SedonaCScalarKernel* out) { s2geography::sedona_udf::MaxDistanceKernel(out); },
+        state.GetContext(), args, result);
   }
 };
 

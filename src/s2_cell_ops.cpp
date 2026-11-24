@@ -7,9 +7,11 @@
 #include "s2geography/op/cell.h"
 #include "s2geography/op/point.h"
 
+#include "arrow_scalar_udf.hpp"
 #include "s2_endian.hpp"
 #include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
+#include "s2geography/coverings.h"
 
 #include "function_builder.hpp"
 
@@ -20,52 +22,28 @@ namespace duckdb_s2 {
 namespace {
 
 struct S2CellCenterFromGeography {
-  static inline bool ExecuteCast(Vector& source, Vector& result, idx_t count,
-                                 CastParameters& parameters) {
-    Execute(source, result, count);
-    return true;
+  struct LocalState : FunctionLocalState {
+    explicit LocalState(ClientContext& context) : context(context) {}
+    ClientContext& context;
+  };
+
+  static unique_ptr<FunctionLocalState> InitLocalState(
+      CastLocalStateParameters& parameters) {
+    if (!parameters.context) {
+      throw InternalException("GEOGRAPHY to S2_CELL_CENTER requires a client context");
+    }
+    return make_uniq<LocalState>(*parameters.context);
   }
 
-  static inline void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
-
-    UnaryExecutor::Execute<string_t, uint64_t>(
-        source, result, count, [&](string_t geog_str) -> uint64_t {
-          decoder.DecodeTag(geog_str);
-
-          // Empties are always translated as invalid regardless of type
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return S2CellId::Sentinel().id();
-          }
-
-          // If we already have a snapped cell center encoding, the last 8 inlined
-          // bytes are the little endian cell id as a uint64_t
-          if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER &&
-              decoder.tag.covering_size == 1) {
-            uint64_t cell_id = LittleEndian::Load64(geog_str.GetData() + 4);
-            return cell_id;
-          }
-
-          // Otherwise, we just need to load the geography
-          std::unique_ptr<s2geography::Geography> geog = decoder.Decode(geog_str);
-
-          // Use the Shape interface, which should work for PointGeography
-          // and EncodedShapeIndex geography. A single shape with a single
-          // edge always works here.
-          if (geog->num_shapes() != 1) {
-            return S2CellId::Sentinel().id();
-          }
-
-          std::unique_ptr<S2Shape> shape = geog->Shape(0);
-          if (shape->num_edges() != 1 || shape->dimension() != 0) {
-            throw InvalidInputException(
-                std::string("Can't convert geography that is not empty nor a single "
-                            "point to S2_CELL_CENTER"));
-          }
-
-          S2CellId cell(shape->edge(0).v0);
-          return cell.id();
-        });
+  static bool ExecuteCast(Vector& source, Vector& result, idx_t count,
+                          CastParameters& parameters) {
+    DataChunk args;
+    args.InitializeEmpty({Types::GEOGRAPHY()});
+    args.data[0].Reference(source);
+    args.SetCardinalityUnsafe(count);
+    ExecuteArrowScalar(s2geography::sedona_udf::CellIdFromPointKernel,
+                       parameters.local_state->Cast<LocalState>().context, args, result);
+    return true;
   }
 };
 
@@ -1025,8 +1003,11 @@ void RegisterS2CellOps(ExtensionLoader& loader) {
 
   // geography to s2_cell_center must be explicit (can move a point up to 1 cm,
   // fails for input that is not a single point)
-  loader.RegisterCastFunction(Types::GEOGRAPHY(), Types::S2_CELL_CENTER(),
-                              BoundCastInfo(S2CellCenterFromGeography::ExecuteCast), 1);
+  loader.RegisterCastFunction(
+      Types::GEOGRAPHY(), Types::S2_CELL_CENTER(),
+      BoundCastInfo(S2CellCenterFromGeography::ExecuteCast, nullptr,
+                    S2CellCenterFromGeography::InitLocalState),
+      1);
 
   // s2_cell to geography can be implicit (never fails for valid input)
   loader.RegisterCastFunction(Types::S2_CELL(), Types::GEOGRAPHY(),

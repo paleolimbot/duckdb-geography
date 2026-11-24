@@ -65,19 +65,19 @@ true
 query I
 SELECT s2_intersection('POINT (-64 45)'::GEOGRAPHY, 'POINT (-64 46)'::GEOGRAPHY);
 ----
-GEOMETRYCOLLECTION EMPTY
+POINT EMPTY
 
 # Intersection where rhs is EMPTY
 query I
 SELECT s2_intersection('POINT (-64 45)'::GEOGRAPHY, 'POINT EMPTY'::GEOGRAPHY).s2_format(6);
 ----
-POINT (-64 45)
+GEOMETRYCOLLECTION EMPTY
 
 # Intersection where lhs is EMPTY
 query I
 SELECT s2_intersection('POINT EMPTY'::GEOGRAPHY, 'POINT (-64 45)'::GEOGRAPHY).s2_format(6);
 ----
-POINT (-64 45)
+GEOMETRYCOLLECTION EMPTY
 
 # Intersection that must go through the S2BooleanOperation
 query I
@@ -107,7 +107,7 @@ GEOMETRYCOLLECTION EMPTY
 query I
 SELECT s2_difference('POINT (-64 45)'::GEOGRAPHY, 'POINT (-64 45)'::GEOGRAPHY).s2_format(6);
 ----
-GEOMETRYCOLLECTION EMPTY
+POINT EMPTY
 
 # Union where rhs is EMPTY
 query I
@@ -181,13 +181,13 @@ SELECT s2_distance(s2_data_city('Vancouver')::S2_CELL_CENTER, s2_data_city('Toro
 query I
 SELECT s2_distance('POINT EMPTY'::GEOGRAPHY, s2_data_city('Toronto'));
 ----
-inf
+NULL
 
 # Empty RHS
 query I
 SELECT s2_distance(s2_data_city('Toronto'), 'POINT EMPTY'::GEOGRAPHY);
 ----
-inf
+NULL
 
 # Max Distance
 
@@ -207,13 +207,13 @@ SELECT s2_max_distance(s2_data_city('Vancouver')::S2_CELL_CENTER, s2_data_city('
 query I
 SELECT s2_max_distance('POINT EMPTY'::GEOGRAPHY, s2_data_city('Toronto'));
 ----
-inf
+NULL
 
 # Empty RHS
 query I
 SELECT s2_max_distance(s2_data_city('Toronto'), 'POINT EMPTY'::GEOGRAPHY);
 ----
-inf
+NULL
 
 # Make sure distance and max_distance are different
 query I

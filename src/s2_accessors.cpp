@@ -1,6 +1,7 @@
 
 #include "duckdb/main/database.hpp"
 
+#include "arrow_scalar_udf.hpp"
 #include "function_builder.hpp"
 
 #include "s2/s2earth.h"
@@ -178,33 +179,8 @@ SELECT s2_area('POINT (0 0)'::GEOGRAPHY) AS area;
     });
   }
 
-  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    Execute(args.data[0], result, args.size());
-  }
-
-  static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
-
-    UnaryExecutor::Execute<string_t, double>(
-        source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return 0.0;
-          }
-
-          switch (decoder.tag.kind) {
-            case s2geography::GeographyKind::CELL_CENTER:
-            case s2geography::GeographyKind::POINT:
-            case s2geography::GeographyKind::POLYLINE:
-              return 0.0;
-            default: {
-              auto geog = decoder.Decode(geog_str);
-              return s2geography::s2_area(*geog) * S2Earth::RadiusMeters() *
-                     S2Earth::RadiusMeters();
-            }
-          }
-        });
+  static void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ArrowScalarFunction<s2geography::sedona_udf::AreaKernel>(args, state, result);
   }
 };
 
@@ -239,31 +215,8 @@ SELECT s2_perimeter('POINT (0 0)'::GEOGRAPHY) AS perimeter;
         });
   }
 
-  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    Execute(args.data[0], result, args.size());
-  }
-
-  static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
-
-    UnaryExecutor::Execute<string_t, double>(
-        source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return 0.0;
-          }
-
-          switch (decoder.tag.kind) {
-            case s2geography::GeographyKind::CELL_CENTER:
-            case s2geography::GeographyKind::POINT:
-            case s2geography::GeographyKind::POLYLINE:
-              return 0.0;
-            default: {
-              auto geog = decoder.Decode(geog_str);
-              return s2geography::s2_perimeter(*geog) * S2Earth::RadiusMeters();
-            }
-          }
-        });
+  static void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ArrowScalarFunction<s2geography::sedona_udf::PerimeterKernel>(args, state, result);
   }
 };
 
@@ -294,32 +247,8 @@ SELECT s2_length(s2_data_country('Canada')) AS length;
     });
   }
 
-  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    Execute(args.data[0], result, args.size());
-  }
-
-  static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
-
-    UnaryExecutor::Execute<string_t, double>(
-        source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return 0.0;
-          }
-
-          switch (decoder.tag.kind) {
-            case s2geography::GeographyKind::CELL_CENTER:
-            case s2geography::GeographyKind::POINT:
-            case s2geography::GeographyKind::POLYGON:
-              return 0.0;
-            default: {
-              auto geog = decoder.Decode(geog_str);
-              return s2geography::s2_length(*geog) * S2Earth::RadiusMeters();
-            }
-          }
-        });
+  static void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ArrowScalarFunction<s2geography::sedona_udf::LengthKernel>(args, state, result);
   }
 };
 
