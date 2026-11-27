@@ -4,6 +4,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "s2/s2cell_union.h"
+#include "s2/s2latlng_rect.h"
 #include "s2/s2region_coverer.h"
 
 #include "s2_endian.hpp"
@@ -11,7 +12,7 @@
 
 #include "arrow_scalar_udf.hpp"
 #include "function_builder.hpp"
-#include "s2geography/coverings.h"
+#include "s2_kernels.hpp"
 
 namespace duckdb {
 

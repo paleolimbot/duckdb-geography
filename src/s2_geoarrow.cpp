@@ -11,11 +11,40 @@
 #include "s2_functions_io.hpp"
 #include "s2_types.hpp"
 
+#include <cmath>
+#include <cstring>
+
 namespace duckdb {
 
 namespace duckdb_s2 {
 
 namespace {
+
+double ReadCoordinate(const GeoArrowGeometryNode& node, int dimension) {
+  double value;
+  if ((node.flags & GEOARROW_GEOMETRY_NODE_FLAG_SWAP_ENDIAN) == 0) {
+    memcpy(&value, node.coords[dimension], sizeof(double));
+    return value;
+  }
+
+  uint8_t reversed[sizeof(double)];
+  for (idx_t i = 0; i < sizeof(double); i++) {
+    reversed[i] = node.coords[dimension][sizeof(double) - i - 1];
+  }
+  memcpy(&value, reversed, sizeof(double));
+  return value;
+}
+
+bool IsEmptyPoint(const GeoArrowGeometryView& view) {
+  if (view.size_nodes == 0 || view.root->geometry_type != GEOARROW_GEOMETRY_TYPE_POINT) {
+    return false;
+  }
+  if (view.root->size == 0) {
+    return true;
+  }
+  return view.root->size == 1 && std::isnan(ReadCoordinate(*view.root, 0)) &&
+         std::isnan(ReadCoordinate(*view.root, 1));
+}
 
 struct GeoArrowWKB {
   static unique_ptr<ArrowType> GetType(ClientContext& context, const ArrowSchema& schema,
@@ -179,7 +208,7 @@ void ImportWKTToWKB(Vector& source, Vector& result, idx_t count) {
   GeoArrowWKTReaderReset(&reader);
 }
 
-void ExportWKBToWKT(Vector& source, Vector& result, idx_t count) {
+void ExportWKBToWKT(const Vector& source, Vector& result, idx_t count, int precision) {
   GeoArrowWKBReader reader = {};
   GeoArrowWKTWriter writer = {};
   GeoArrowError error = {};
@@ -192,6 +221,8 @@ void ExportWKBToWKT(Vector& source, Vector& result, idx_t count) {
     GeoArrowWKBReaderReset(&reader);
     throw InvalidInputException("GeoArrow WKT writer initialization failed");
   }
+  writer.precision = precision;
+  writer.use_flat_multipoint = 0;
 
   try {
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkb) {
@@ -201,6 +232,15 @@ void ExportWKBToWKT(Vector& source, Vector& result, idx_t count) {
 
       GeoArrowBufferView wkb_view = {reinterpret_cast<const uint8_t*>(wkb.GetData()),
                                      static_cast<int64_t>(wkb.GetSize())};
+      GeoArrowGeometryView geometry_view = {};
+      if (GeoArrowWKBReaderRead(&reader, wkb_view, &geometry_view, &error) !=
+          GEOARROW_OK) {
+        throw InvalidInputException("GeoArrow WKB parse error: %s", error.message);
+      }
+      if (IsEmptyPoint(geometry_view)) {
+        return StringVector::AddString(result, "POINT EMPTY");
+      }
+
       if (GeoArrowWKBReaderVisit(&reader, wkb_view, &visitor) != GEOARROW_OK) {
         throw InvalidInputException("GeoArrow WKB parse error: %s", error.message);
       }

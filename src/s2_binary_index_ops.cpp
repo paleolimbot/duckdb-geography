@@ -2,23 +2,20 @@
 #include "duckdb/main/database.hpp"
 
 #include "s2/s2cell_union.h"
-#include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
+#include "s2_wkb.hpp"
 
-#include "s2geography/build.h"
 #include "s2geography_c.h"
 
 #include "arrow_scalar_udf.hpp"
 #include "function_builder.hpp"
-#include "s2geography/distance.h"
+#include "s2_kernels.hpp"
 
 namespace duckdb {
 
 namespace duckdb_s2 {
 
 namespace {
-using UniqueGeography = std::unique_ptr<s2geography::Geography>;
-
 class WKBOperationContext {
  public:
   explicit WKBOperationContext(int operation_id) {
@@ -386,9 +383,7 @@ SELECT s2_union(
 
   static void ExecuteMayIntersectFn(DataChunk& args, ExpressionState& state,
                                     Vector& result) {
-    return ExecutePredicateFn(
-        args, state, result,
-        [](UniqueGeography lhs, UniqueGeography rhs) { return true; });
+    ExecuteMayIntersect(args.data[0], args.data[1], result, args.size());
   }
 
   static void ExecuteIntersectsFn(DataChunk& args, ExpressionState& state,
@@ -417,36 +412,25 @@ SELECT s2_union(
                               S2GEOGRAPHY_OP_EQUALS);
   }
 
-  template <typename Filter>
-  static void ExecutePredicateFn(DataChunk& args, ExpressionState& state, Vector& result,
-                                 Filter&& filter) {
-    ExecutePredicate(args.data[0], args.data[1], result, args.size(), filter);
-  }
-
-  template <typename Filter>
-  static void ExecutePredicate(Vector& lhs, Vector& rhs, Vector& result, idx_t count,
-                               Filter&& filter) {
-    GeographyDecoder lhs_decoder;
-    GeographyDecoder rhs_decoder;
+  static void ExecuteMayIntersect(Vector& lhs, Vector& rhs, Vector& result, idx_t count) {
+    WKBGeography lhs_reader;
+    WKBGeography rhs_reader;
     std::vector<S2CellId> intersection;
 
     BinaryExecutor::Execute<string_t, string_t, bool>(
         lhs, rhs, result, count, [&](string_t lhs_str, string_t rhs_str) {
-          lhs_decoder.DecodeTagAndCovering(lhs_str);
-          if (lhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+          const auto& lhs_geography = lhs_reader.Read(lhs_str);
+          if (lhs_geography.is_empty()) {
             return false;
           }
 
-          rhs_decoder.DecodeTagAndCovering(rhs_str);
-          if (rhs_decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+          const auto& rhs_geography = rhs_reader.Read(rhs_str);
+          if (rhs_geography.is_empty()) {
             return false;
           }
 
-          if (!CoveringMayIntersect(lhs_decoder, rhs_decoder, &intersection)) {
-            return false;
-          }
-
-          return filter(lhs_decoder.Decode(lhs_str), rhs_decoder.Decode(rhs_str));
+          return CoveringMayIntersect(lhs_geography.Covering(), rhs_geography.Covering(),
+                                      &intersection);
         });
   }
 
@@ -464,16 +448,16 @@ SELECT s2_union(
     ArrowScalarFunction<s2geography::sedona_udf::UnionKernel>(args, state, result);
   }
 
-  static bool CoveringMayIntersect(const GeographyDecoder& lhs,
-                                   const GeographyDecoder& rhs,
+  static bool CoveringMayIntersect(const std::vector<S2CellId>& lhs,
+                                   const std::vector<S2CellId>& rhs,
                                    std::vector<S2CellId>* intersection_scratch) {
     // We don't currently omit coverings but in case we do by accident,
     // an omitted covering *might* intersect since it was just not generated.
-    if (lhs.covering.empty() || rhs.covering.empty()) {
+    if (lhs.empty() || rhs.empty()) {
       return true;
     }
 
-    S2CellUnion::GetIntersection(lhs.covering, rhs.covering, intersection_scratch);
+    S2CellUnion::GetIntersection(lhs, rhs, intersection_scratch);
     return !intersection_scratch->empty();
   }
 };

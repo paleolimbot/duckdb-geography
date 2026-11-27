@@ -1,17 +1,9 @@
 
 #include "duckdb/main/database.hpp"
 
-#include "s2/encoded_s2shape_index.h"
-#include "s2/s2shape_index_region.h"
-#include "s2/s2shapeutil_coding.h"
-#include "s2geography/geography.h"
-
-#include "s2_geography_serde.hpp"
+#include "s2_functions_io.hpp"
 #include "s2_types.hpp"
-#include "s2geography/geoarrow.h"
-#include "s2geography/wkb.h"
-#include "s2geography/wkt-reader.h"
-#include "s2geography/wkt-writer.h"
+#include "s2_wkb.hpp"
 
 #include "function_builder.hpp"
 
@@ -77,9 +69,7 @@ SELECT s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)');
 
   static inline void ExecuteFnNovalidate(DataChunk& args, ExpressionState& state,
                                          Vector& result) {
-    s2geography::geoarrow::ImportOptions options;
-    options.set_check(false);
-    Execute(args.data[0], result, args.size(), options);
+    Execute(args.data[0], result, args.size(), false);
   }
 
   static inline bool ExecuteCast(Vector& source, Vector& result, idx_t count,
@@ -89,14 +79,21 @@ SELECT s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)');
   }
 
   static inline void Execute(const Vector& source, Vector& result, idx_t count,
-                             const s2geography::geoarrow::ImportOptions& options =
-                                 s2geography::geoarrow::ImportOptions()) {
-    GeographyEncoder encoder;
-    s2geography::WKTReader reader(options);
+                             bool validate = true) {
+    WKTToWKB converter;
+    WKBGeography reader;
 
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkt) {
-      auto geog = reader.read_feature(wkt.GetData(), wkt.GetSize());
-      return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
+      auto wkb = converter.Convert(wkt.GetData(), wkt.GetSize());
+      if (validate) {
+        S2Error error;
+        const auto& geography = reader.Read(string_t(wkb.data(), wkb.size()));
+        if (FindValidationError(geography, &error)) {
+          throw InvalidInputException("Invalid geography: %s",
+                                      std::string(error.message()));
+        }
+      }
+      return StringVector::AddStringOrBlob(result, wkb);
     });
   }
 };
@@ -175,21 +172,7 @@ SELECT s2_format(s2_data_city('Vancouver'), 1);
 
   static inline void Execute(const Vector& source, Vector& result, idx_t count,
                              int8_t precision = -1) {
-    GeographyDecoder decoder;
-    s2geography::WKTWriter writer(precision);
-
-    UnaryExecutor::Execute<string_t, string_t>(
-        source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-          if (decoder.tag.kind == s2geography::GeographyKind::SHAPE_INDEX) {
-            return StringVector::AddString(
-                result, std::string("<S2ShapeIndex ") +
-                            std::to_string(geog_str.GetSize()) + " b>");
-          }
-          auto geog = decoder.Decode(geog_str);
-          std::string wkt = writer.write_feature(*geog);
-          return StringVector::AddString(result, wkt);
-        });
+    ExportWKBToWKT(source, result, count, precision < 0 ? 16 : precision);
   }
 };
 
@@ -250,18 +233,22 @@ SELECT s2_geogfromwkb_novalidate(
 
   static inline void ExecuteFnNovalidate(DataChunk& args, ExpressionState& state,
                                          Vector& result) {
-    s2geography::geoarrow::ImportOptions options;
-    options.set_check(false);
-    Execute(args.data[0], result, args.size(), options);
+    Execute(args.data[0], result, args.size(), false);
   }
 
   static inline void Execute(const Vector& source, Vector& result, idx_t count,
-                             const s2geography::geoarrow::ImportOptions& options =
-                                 s2geography::geoarrow::ImportOptions()) {
-    s2geography::WKBReader reader(options);
+                             bool validate = true) {
+    WKBGeography reader;
 
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkb) {
-      reader.ReadFeature(std::string_view(wkb.GetData(), wkb.GetSize()));
+      const auto& geography = reader.Read(wkb);
+      if (validate) {
+        S2Error error;
+        if (FindValidationError(geography, &error)) {
+          throw InvalidInputException("Invalid geography: %s",
+                                      std::string(error.message()));
+        }
+      }
       return StringVector::AddStringOrBlob(result, wkb);
     });
   }
@@ -299,10 +286,8 @@ SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
   }
 
   static inline void Execute(const Vector& source, Vector& result, idx_t count,
-                             const s2geography::geoarrow::ExportOptions& options =
-                                 s2geography::geoarrow::ExportOptions()) {
-    (void)options;
-
+                             bool copy = true) {
+    (void)copy;
     UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](string_t wkb) {
       return StringVector::AddStringOrBlob(result, wkb);
     });
@@ -310,11 +295,11 @@ SELECT s2_aswkb(s2_data_city('Toronto')) as wkb;
 };
 
 void ImportWKBToGeography(const Vector& source, Vector& result, idx_t count) {
-  S2GeogFromWKB::Execute(source, result, count, s2geography::geoarrow::ImportOptions());
+  S2GeogFromWKB::Execute(source, result, count);
 }
 
 void ExportGeographyToWKB(const Vector& source, Vector& result, idx_t count) {
-  S2AsWKB::Execute(source, result, count, s2geography::geoarrow::ExportOptions());
+  S2AsWKB::Execute(source, result, count);
 }
 
 void RegisterS2GeographyFunctionsIO(ExtensionLoader& loader) {

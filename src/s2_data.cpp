@@ -3,11 +3,10 @@
 #include "duckdb/function/table_function.hpp"
 
 #include <absl/base/config.h>
-#include <s2geography/wkt-reader.h>
 
 #include "s2_data_static.hpp"
-#include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
+#include "s2_wkb.hpp"
 
 #include "function_builder.hpp"
 
@@ -50,8 +49,7 @@ void S2DataCitiesScan(ClientContext& context, TableFunctionInput& data_p,
     end = n_cities;
   }
 
-  s2geography::WKTReader reader;
-  GeographyEncoder encoder;
+  WKTToWKB converter;
   Vector& names = output.data[0];
   Vector& populations = output.data[1];
   Vector& geogs = output.data[2];
@@ -66,8 +64,8 @@ void S2DataCitiesScan(ClientContext& context, TableFunctionInput& data_p,
     names.SetValue(i - start, StringVector::AddString(names, city.name));
     populations.SetValue(i - start, city.population);
 
-    auto geog = reader.read_feature(city.geog_wkt);
-    string_t encoded = StringVector::AddStringOrBlob(geogs, encoder.Encode(*geog));
+    auto wkb = converter.Convert(city.geog_wkt);
+    string_t encoded = StringVector::AddStringOrBlob(geogs, wkb);
     geogs_data[i] = encoded;
   }
 
@@ -102,8 +100,7 @@ void S2DataCountriesScan(ClientContext& context, TableFunctionInput& data_p,
     end = n_cities;
   }
 
-  s2geography::WKTReader reader;
-  GeographyEncoder encoder;
+  WKTToWKB converter;
   Vector& names = output.data[0];
   Vector& continents = output.data[1];
   Vector& geogs = output.data[2];
@@ -118,8 +115,8 @@ void S2DataCountriesScan(ClientContext& context, TableFunctionInput& data_p,
     names.SetValue(i - start, StringVector::AddString(names, country.name));
     continents.SetValue(i - start, StringVector::AddString(names, country.continent));
 
-    auto geog = reader.read_feature(country.geog_wkt);
-    string_t encoded = StringVector::AddStringOrBlob(geogs, encoder.Encode(*geog));
+    auto wkb = converter.Convert(country.geog_wkt);
+    string_t encoded = StringVector::AddStringOrBlob(geogs, wkb);
     geogs_data[i] = encoded;
   }
 
@@ -166,8 +163,7 @@ SELECT s2_data_country('Fiji') as country;
   }
 
   static void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    s2geography::WKTReader reader;
-    GeographyEncoder encoder;
+    WKTToWKB converter;
 
     std::unordered_map<std::string, const char*> cache;
     for (const T& item : ItemList<T>()) {
@@ -183,8 +179,8 @@ SELECT s2_data_country('Fiji') as country;
                                         "'");
           }
 
-          auto geog = reader.read_feature(item->second);
-          return StringVector::AddStringOrBlob(result, encoder.Encode(*geog));
+          auto wkb = converter.Convert(item->second);
+          return StringVector::AddStringOrBlob(result, wkb);
         });
   }
 };
