@@ -12,7 +12,8 @@ void ExportGeographyToWKB(const Vector& source, Vector& result, idx_t count);
 
 void ImportWKTToWKB(Vector& source, Vector& result, idx_t count);
 
-void ExportWKBToWKT(Vector& source, Vector& result, idx_t count);
+void ExportWKBToWKT(const Vector& source, Vector& result, idx_t count,
+                    int precision = 16);
 
 void RegisterS2GeographyFunctionsIO(ExtensionLoader& loader);
 }  // namespace duckdb_s2

@@ -9,9 +9,9 @@
 
 #include "arrow_scalar_udf.hpp"
 #include "s2_endian.hpp"
-#include "s2_geography_serde.hpp"
+#include "s2_kernels.hpp"
 #include "s2_types.hpp"
-#include "s2geography/coverings.h"
+#include "s2_wkb.hpp"
 
 #include "function_builder.hpp"
 
@@ -121,7 +121,7 @@ struct S2CellUnionToGeography {
   }
 
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyEncoder encoder;
+    WKBWriter writer;
     vector<S2CellId> cell_ids;
     // Not sure if this is the appropriate way to handle list child data
     // in the presence of a possible dictionary vector as a source
@@ -142,12 +142,11 @@ struct S2CellUnionToGeography {
           auto cells = S2CellUnion(std::move(cell_ids));
           auto poly = make_uniq<S2Polygon>();
           poly->InitToCellUnionBorder(cells);
-          s2geography::PolygonGeography geog(std::move(poly));
           cell_ids = cells.Release();
 
           // Would be nice if we could set the covering here since we already
           // know exactly what it is!
-          return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
+          return StringVector::AddStringOrBlob(result, writer.Polygon(*poly));
         });
   }
 };
@@ -503,16 +502,14 @@ struct S2CellCenterToGeography {
   }
 
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyEncoder encoder;
+    WKBWriter writer;
 
     UnaryExecutor::Execute<uint64_t, string_t>(source, result, count, [&](uint64_t arg0) {
       S2CellId cell(arg0);
       if (cell.is_valid()) {
-        s2geography::PointGeography geog(cell.ToPoint());
-        return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
+        return StringVector::AddStringOrBlob(result, writer.Point(cell.ToPoint()));
       } else {
-        s2geography::PointGeography geog;
-        return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
+        return StringVector::AddStringOrBlob(result, writer.Point(std::nullopt));
       }
     });
   }
@@ -526,19 +523,18 @@ struct S2CellToGeography {
   }
 
   static inline void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyEncoder encoder;
+    WKBWriter writer;
 
     UnaryExecutor::Execute<uint64_t, string_t>(source, result, count, [&](uint64_t arg0) {
       S2CellId cell(arg0);
       if (!cell.is_valid()) {
-        s2geography::PolygonGeography geog;
-        return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
+        S2Polygon polygon;
+        return StringVector::AddStringOrBlob(result, writer.Polygon(polygon));
       }
 
       auto loop = make_uniq<S2Loop>(S2Cell(cell));
-      auto poly = make_uniq<S2Polygon>(std::move(loop));
-      s2geography::PolygonGeography geog(std::move(poly));
-      return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
+      S2Polygon polygon(std::move(loop));
+      return StringVector::AddStringOrBlob(result, writer.Polygon(polygon));
     });
   }
 };
@@ -582,14 +578,14 @@ SELECT '5/'::S2_CELL::GEOGRAPHY as geog;
   static inline void Execute(DataChunk& args, ExpressionState& state, Vector& result) {
     using s2geography::op::point::Point;
     s2geography::op::cell::CellVertex op;
-    GeographyEncoder encoder;
+    WKBWriter writer;
 
     BinaryExecutor::Execute<uint64_t, int32_t, string_t>(
         args.data[0], args.data[1], result, args.size(),
         [&](uint64_t cell_id, int32_t vertex_id) {
           Point pt = op.ExecuteScalar(cell_id, static_cast<int8_t>(vertex_id));
-          s2geography::PointGeography geog({pt[0], pt[1], pt[2]});
-          return StringVector::AddStringOrBlob(result, encoder.Encode(geog));
+          return StringVector::AddStringOrBlob(
+              result, writer.Point(S2Point(pt[0], pt[1], pt[2])));
         });
   }
 };

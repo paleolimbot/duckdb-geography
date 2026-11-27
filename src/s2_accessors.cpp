@@ -3,12 +3,9 @@
 
 #include "arrow_scalar_udf.hpp"
 #include "function_builder.hpp"
+#include "s2_kernels.hpp"
+#include "s2_wkb.hpp"
 
-#include "s2/s2earth.h"
-#include "s2geography/accessors.h"
-
-#include "s2/s2cell_union.h"
-#include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
 namespace duckdb {
@@ -40,11 +37,10 @@ struct S2IsEmpty {
   }
 
   static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
+    WKBGeography reader;
 
     UnaryExecutor::Execute<string_t, bool>(source, result, count, [&](string_t geog_str) {
-      decoder.DecodeTag(geog_str);
-      return decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty;
+      return reader.Read(geog_str).is_empty();
     });
   }
 };
@@ -81,19 +77,15 @@ SELECT s2_is_valid(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)')) AS 
   }
 
   static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
+    WKBGeography reader;
     S2Error error;
 
     UnaryExecutor::Execute<string_t, bool>(source, result, count, [&](string_t geog_str) {
-      decoder.DecodeTag(geog_str);
-      if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-        return true;
-      } else if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+      const auto& geography = reader.Read(geog_str);
+      if (geography.is_empty()) {
         return true;
       }
-
-      auto geog = decoder.Decode(geog_str);
-      return !s2geography::s2_find_validation_error(*geog, &error);
+      return !FindValidationError(geography, &error);
     });
   }
 };
@@ -127,21 +119,18 @@ SELECT s2_is_valid_reason(s2_geogfromtext_novalidate('LINESTRING (0 0, 0 0, 1 1)
   }
 
   static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
+    WKBGeography reader;
     S2Error error;
 
     UnaryExecutor::Execute<string_t, string_t>(
         source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return string_t{""};
-          } else if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
+          const auto& geography = reader.Read(geog_str);
+          if (geography.is_empty()) {
             return string_t{""};
           }
 
-          auto geog = decoder.Decode(geog_str);
           error = S2Error();  // Reset error state
-          if (!s2geography::s2_find_validation_error(*geog, &error)) {
+          if (!FindValidationError(geography, &error)) {
             return string_t{""};
           } else {
             auto msg = error.message();
@@ -298,42 +287,27 @@ SELECT s2_y('POINT (-64 45)'::GEOGRAPHY);
   }
 
   static inline void ExecuteFnX(DataChunk& args, ExpressionState& state, Vector& result) {
-    Execute(
-        args.data[0], result, args.size(), [](S2LatLng ll) { return ll.lng().degrees(); },
-        [](const s2geography::Geography& geog) { return s2_x(geog); });
+    Execute(args.data[0], result, args.size(),
+            [](S2LatLng lng_lat) { return lng_lat.lng().degrees(); });
   }
 
   static inline void ExecuteFnY(DataChunk& args, ExpressionState& state, Vector& result) {
-    Execute(
-        args.data[0], result, args.size(), [](S2LatLng ll) { return ll.lat().degrees(); },
-        [](const s2geography::Geography& geog) { return s2_y(geog); });
+    Execute(args.data[0], result, args.size(),
+            [](S2LatLng lng_lat) { return lng_lat.lat().degrees(); });
   }
 
-  template <typename HandleLatLng, typename HandleGeog>
+  template <typename HandleLatLng>
   static void Execute(Vector& source, Vector& result, idx_t count,
-                      HandleLatLng&& handle_latlng, HandleGeog&& handle_geog) {
-    GeographyDecoder decoder;
+                      HandleLatLng&& handle_latlng) {
+    WKBGeography reader;
 
     UnaryExecutor::Execute<string_t, double>(
         source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
+          const auto& geography = reader.Read(geog_str);
+          if (geography.points()->num_edges() != 1) {
             return static_cast<double>(NAN);
           }
-
-          switch (decoder.tag.kind) {
-            case s2geography::GeographyKind::CELL_CENTER: {
-              decoder.DecodeTagAndCovering(geog_str);
-              S2Point center = decoder.covering[0].ToPoint();
-              return handle_latlng(S2LatLng(center));
-            }
-
-            default: {
-              auto geog = decoder.Decode(geog_str);
-              return handle_geog(*geog);
-            }
-          }
+          return handle_latlng(S2LatLng(geography.points()->edge(0).v0));
         });
   }
 };
@@ -378,26 +352,11 @@ SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::G
   }
 
   static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
+    WKBGeography reader;
 
     UnaryExecutor::Execute<string_t, int32_t>(
-        source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-
-          switch (decoder.tag.kind) {
-            case s2geography::GeographyKind::CELL_CENTER:
-            case s2geography::GeographyKind::POINT:
-              return 0;
-            case s2geography::GeographyKind::POLYLINE:
-              return 1;
-            case s2geography::GeographyKind::POLYGON:
-              return 2;
-            default: {
-              auto geog = decoder.Decode(geog_str);
-              return s2geography::s2_dimension(*geog);
-            }
-          }
-        });
+        source, result, count,
+        [&](string_t geog_str) { return reader.Read(geog_str).max_dimension(); });
   }
 };
 
@@ -430,24 +389,13 @@ SELECT s2_num_points(s2_data_country('Canada'));
   }
 
   static void Execute(Vector& source, Vector& result, idx_t count) {
-    GeographyDecoder decoder;
+    WKBGeography reader;
 
     UnaryExecutor::Execute<string_t, int32_t>(
         source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return 0;
-          }
-
-          switch (decoder.tag.kind) {
-            case s2geography::GeographyKind::CELL_CENTER:
-              return 1;
-            default: {
-              auto geog = decoder.Decode(geog_str);
-              return s2geography::s2_num_points(*geog);
-            }
-          }
+          const auto& geography = reader.Read(geog_str);
+          return geography.points()->num_edges() + geography.lines()->num_edges() +
+                 geography.lines()->num_chains() + geography.polygons()->num_edges();
         });
   }
 };
