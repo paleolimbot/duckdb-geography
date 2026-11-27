@@ -7,10 +7,11 @@
 #include "s2/s2region_coverer.h"
 
 #include "s2_endian.hpp"
-#include "s2_geography_serde.hpp"
 #include "s2_types.hpp"
 
+#include "arrow_scalar_udf.hpp"
 #include "function_builder.hpp"
+#include "s2geography/coverings.h"
 
 namespace duckdb {
 
@@ -82,67 +83,26 @@ SELECT s2_covering_fixed_level(s2_data_country('Germany'), 4) AS covering;
         });
   }
 
-  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    S2RegionCoverer coverer;
-    Execute(args.data[0], result, args.size(), coverer);
+  static void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ArrowScalarFunction<s2geography::sedona_udf::CoveringCellIdsKernel>(args, state,
+                                                                        result);
   }
 
-  static inline void ExecuteFnFixedLevel(DataChunk& args, ExpressionState& state,
-                                         Vector& result) {
-    Vector& max_cells_param = args.data[1];
-    if (max_cells_param.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+  static void ExecuteFnFixedLevel(DataChunk& args, ExpressionState& state,
+                                  Vector& result) {
+    auto& level = args.data[1];
+    if (level.GetVectorType() != VectorType::CONSTANT_VECTOR) {
       throw InvalidInputException("s2_covering_fixed_level(): level must be a constant");
     }
-
-    int fixed_level = max_cells_param.GetValue(0).GetValue<int>();
-    if (fixed_level < 0 || fixed_level > S2CellId::kMaxLevel) {
-      throw InvalidInputException(
-          "s2_covering_fixed_level(): level must be between 0 and 30");
-    }
-
-    S2RegionCoverer coverer;
-    coverer.mutable_options()->set_fixed_level(fixed_level);
-    Execute(args.data[0], result, args.size(), coverer);
-  }
-
-  static void Execute(Vector& source, Vector& result, idx_t count,
-                      S2RegionCoverer& coverer) {
-    ListVector::Reserve(result, count * coverer.options().max_cells());
-    uint64_t offset = 0;
-
-    GeographyDecoder decoder;
-
-    UnaryExecutor::Execute<string_t, list_entry_t>(
-        source, result, count, [&](string_t geog_str) {
-          decoder.DecodeTag(geog_str);
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            return list_entry_t{0, 0};
-          }
-
-          switch (decoder.tag.kind) {
-            case s2geography::GeographyKind::CELL_CENTER: {
-              decoder.DecodeTagAndCovering(geog_str);
-              S2CellId cell_id =
-                  decoder.covering[0].parent(coverer.options().max_level());
-              ListVector::PushBack(result, Value::UBIGINT(cell_id.id()));
-              list_entry_t out{offset, 1};
-              offset += 1;
-              return out;
-            }
-
-            default: {
-              auto geog = decoder.Decode(geog_str);
-              S2CellUnion covering = coverer.GetCovering(*geog->Region());
-              for (const auto cell_id : covering) {
-                ListVector::PushBack(result, Value::UBIGINT(cell_id.id()));
-              }
-
-              list_entry_t out{offset, covering.size()};
-              offset += out.length;
-              return out;
-            }
-          }
-        });
+    DataChunk input;
+    input.InitializeEmpty(
+        {Types::GEOGRAPHY(), LogicalType::INTEGER, LogicalType::INTEGER});
+    input.data[0].Reference(args.data[0]);
+    input.data[1].Reference(level);
+    input.data[2].Reference(level);
+    input.SetCardinalityUnsafe(args.size());
+    ExecuteArrowScalar(s2geography::sedona_udf::CoveringCellIdsLevelRangeKernel,
+                       state.GetContext(), input, result);
   }
 };
 
@@ -161,7 +121,7 @@ struct S2BoundsRect {
 Returns the bounds of the input geography as a box with Cartesian edges.
 
 The output xmin may be greater than xmax if the geography crosses the
-antimeridian.
+antimeridian. Empty geographies return NULL.
 )");
           func.SetExample(R"(
 SELECT s2_bounds_box(s2_data_country('Germany')) as rect;
@@ -174,32 +134,8 @@ SELECT s2_bounds_box(s2_data_country('Fiji')) as rect;
         });
   }
 
-  static inline void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
-    auto count = args.size();
-    auto& input = args.data[0];
-
-    using BOX_TYPE = StructTypeQuaternary<double, double, double, double>;
-    using GEOGRAPHY_TYPE = PrimitiveType<string_t>;
-
-    GeographyDecoder decoder;
-
-    GenericExecutor::ExecuteUnary<GEOGRAPHY_TYPE, BOX_TYPE>(
-        input, result, count, [&](GEOGRAPHY_TYPE& blob) {
-          decoder.DecodeTag(blob.val);
-          S2LatLngRect out;
-          if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-            out = S2LatLngRect::Empty();
-          } else if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
-            uint64_t cell_id = LittleEndian::Load64(blob.val.GetData() + 4);
-            S2CellId cell(cell_id);
-            out = S2LatLngRect::FromPoint(cell.ToLatLng());
-          } else {
-            auto geog = decoder.Decode(blob.val);
-            out = geog->Region()->GetRectBound();
-          }
-          return BOX_TYPE{out.lng_lo().degrees(), out.lat_lo().degrees(),
-                          out.lng_hi().degrees(), out.lat_hi().degrees()};
-        });
+  static void ExecuteFn(DataChunk& args, ExpressionState& state, Vector& result) {
+    ArrowScalarFunction<s2geography::sedona_udf::BoundingBoxKernel>(args, state, result);
   }
 };
 
@@ -222,26 +158,6 @@ struct S2BoundsRectAgg {
     }
 
     void Union(const State& other) { Union(S2LatLngRect(other.lat, other.lng)); }
-
-    void Update(const string_t& input) {
-      GeographyDecoder decoder;
-      decoder.DecodeTag(input);
-      if (decoder.tag.flags & s2geography::EncodeTag::kFlagEmpty) {
-        return;
-      }
-
-      if (decoder.tag.kind == s2geography::GeographyKind::CELL_CENTER) {
-        uint64_t cell_id = LittleEndian::Load64(input.GetData() + 4);
-        S2CellId cell(cell_id);
-        S2LatLng pt = cell.ToLatLng();
-        S2LatLngRect rect(pt, pt);
-        Union(rect);
-      } else {
-        const auto geog = decoder.Decode(input);
-        S2LatLngRect rect = geog->Region()->GetRectBound();
-        Union(rect);
-      }
-    }
   };
 
   static idx_t StateSize(AggregateStateInput&) { return sizeof(State); }
@@ -253,31 +169,50 @@ struct S2BoundsRectAgg {
     }
   }
 
-  static void Update(Vector inputs[], AggregateInputData&, idx_t, Vector& state_vec,
-                     idx_t count) {
-    auto& input_vec = inputs[0];
+  struct BindData : FunctionData {
+    explicit BindData(ClientContext& context) : context(context) {}
+    ClientContext& context;
 
-    UnifiedVectorFormat input_format;
-    input_vec.ToUnifiedFormat(count, input_format);
+    unique_ptr<FunctionData> Copy() const override {
+      return make_uniq<BindData>(context);
+    }
+    bool Equals(const FunctionData& other) const override {
+      return &context == &other.Cast<BindData>().context;
+    }
+  };
+
+  static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput& input) {
+    return make_uniq<BindData>(input.GetClientContext());
+  }
+
+  static void Update(Vector inputs[], AggregateInputData& aggr, idx_t, Vector& state_vec,
+                     idx_t count) {
+    DataChunk args;
+    args.InitializeEmpty({Types::GEOGRAPHY()});
+    args.data[0].Reference(inputs[0]);
+    args.SetCardinalityUnsafe(count);
+    Vector bounds(Types::S2_BOX(), MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+    ExecuteArrowScalar(s2geography::sedona_udf::BoundingBoxKernel,
+                       aggr.bind_data->Cast<BindData>().context, args, bounds);
+    bounds.Flatten(count);
 
     UnifiedVectorFormat state_format;
     state_vec.ToUnifiedFormat(count, state_format);
-
-    const auto state_ptr = UnifiedVectorFormat::GetData<State*>(state_format);
-    const auto input_ptr = UnifiedVectorFormat::GetData<string_t>(input_format);
-
-    for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
-      const auto state_idx = state_format.sel->get_index(raw_idx);
-      const auto input_idx = input_format.sel->get_index(raw_idx);
-
-      if (!input_format.validity.RowIsValid(input_idx)) {
-        continue;
-      }
-
-      auto& state = *state_ptr[state_idx];
-      auto& input = input_ptr[input_idx];
-
-      state.Update(input);
+    auto state_ptr = UnifiedVectorFormat::GetData<State*>(state_format);
+    const auto& fields = StructVector::GetEntries(bounds);
+    auto xmin = FlatVector::GetData<double>(fields[0]);
+    auto ymin = FlatVector::GetData<double>(fields[1]);
+    auto xmax = FlatVector::GetData<double>(fields[2]);
+    auto ymax = FlatVector::GetData<double>(fields[3]);
+    const auto& validity = FlatVector::Validity(bounds);
+    for (idx_t i = 0; i < count; i++) {
+      // The kernel returns NULL for empty geographies and NULL inputs.
+      if (!validity.RowIsValid(i)) continue;
+      S2LatLngRect rect(R1Interval(S1Angle::Degrees(ymin[i]).radians(),
+                                   S1Angle::Degrees(ymax[i]).radians()),
+                        S1Interval(S1Angle::Degrees(xmin[i]).radians(),
+                                   S1Angle::Degrees(xmax[i]).radians()));
+      state_ptr[state_format.sel->get_index(i)]->Union(rect);
     }
   }
 
@@ -326,6 +261,7 @@ struct S2BoundsRectAgg {
     AggregateFunction function("s2_bounds_box_agg", {Types::GEOGRAPHY()}, Types::S2_BOX(),
                                StateSize, Initialize, Update, Combine, Finalize,
                                FunctionNullHandling::DEFAULT_NULL_HANDLING);
+    function.SetBindCallback(Bind);
     function.SetFallible();
     loader.RegisterFunction(function);
   }

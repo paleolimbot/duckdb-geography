@@ -157,6 +157,8 @@ SELECT s2_dimension('GEOMETRYCOLLECTION (POINT (0 1), LINESTRING (0 0, 1 1))'::G
 
 Calculate the shortest distance between two geographies.
 
+Returns NULL if either geography is empty.
+
 ```sql
 DOUBLE s2_distance(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
 ```
@@ -337,6 +339,8 @@ SELECT s2_length(s2_data_country('Canada')) AS length;
 
 Calculate the farthest distance between two geographies.
 
+Returns NULL if either geography is empty.
+
 ```sql
 DOUBLE s2_max_distance(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
 ```
@@ -481,7 +485,7 @@ S2_BOX s2_bounds_box(geog GEOGRAPHY)
 #### Description
 
 The output xmin may be greater than xmax if the geography crosses the
-antimeridian.
+antimeridian. Empty geographies return NULL.
 
 #### Example
 
@@ -1477,6 +1481,9 @@ Returns the intersection of two geographies.
 ```sql
 GEOGRAPHY s2_intersection(geog1 GEOGRAPHY, geog2 GEOGRAPHY)
 ```
+
+Returns an empty geography if either input is empty. Empty overlay results may
+retain their geometry type (for example, `POINT EMPTY`).
 
 #### Example
 

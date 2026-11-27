@@ -116,6 +116,7 @@ The geography extension defines the following types:
   For maximum efficiency, always store points as cell centers (they can be loaded
   directly from WKB using `s2_cellfromwkb()` created from longitude and latitude
   with `s2_cellfromlonlat()`, or casted from an existing `GEOGRAPHY`).
+  Casting an empty `GEOGRAPHY` to `S2_CELL_CENTER` returns `NULL`.
 
 - `S2_CELL_UNION`: A normalized list of `S2_CELL`s. This can be used to
    approximate a polygon and is used internally as a rapid mechanism for

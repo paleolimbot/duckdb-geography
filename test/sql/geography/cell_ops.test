@@ -52,7 +52,7 @@ SELECT 'POINT (-64 45)'::GEOGRAPHY::S2_CELL_CENTER;
 statement error
 SELECT 'LINESTRING (-64 45, 0 0)'::GEOGRAPHY::S2_CELL_CENTER::VARCHAR;
 ----
-Invalid Input Error: Can't convert geography that is not empty nor a single point to S2_CELL_CENTER
+Can't compute point cell ID from a non-point geography
 
 query I
 SELECT ('2/0'::S2_CELL::S2_CELL_UNION::GEOGRAPHY).s2_format(6);
